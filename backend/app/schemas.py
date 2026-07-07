@@ -84,3 +84,29 @@ class LiveMetricsResponse(BaseModel):
     timeline: List[TimelineEventSchema]
     compaction_analytics: List[CompactionAnalyticsSchema] = []
     suspicious_patterns: List[SuspiciousPatternSchema] = []
+
+class SessionSummarySchema(BaseModel):
+    session_id: str
+    duration_seconds: int
+    file_events_count: int
+    files_touched: int
+    total_lines_written: int
+    total_lines_deleted: int
+    write_amplification: float
+    files_created: int
+    files_deleted: int
+    files_recreated: int
+    possible_compactions: int
+    possible_tool_calls: int
+    suspicious_patterns: int
+    quality_score: Optional[int] = None
+
+class ComparisonResultSchema(BaseModel):
+    more_efficient: Optional[str]
+    more_churn: Optional[str]
+    quality_trend: Optional[str]
+
+class CompareSessionsResponse(BaseModel):
+    session1: SessionSummarySchema
+    session2: SessionSummarySchema
+    comparison: ComparisonResultSchema

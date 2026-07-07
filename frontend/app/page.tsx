@@ -17,6 +17,7 @@ export default function Home() {
   const [promptNote, setPromptNote] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [recentSessions, setRecentSessions] = useState<any[]>([]);
+  const [selectedSessions, setSelectedSessions] = useState<string[]>([]);
 
   useEffect(() => {
     listSessions().then(setRecentSessions).catch(console.error);
@@ -121,15 +122,51 @@ export default function Home() {
                 <p className="text-sm text-slate-500">No recent sessions found.</p>
               ) : (
                 <div className="space-y-3">
-                  {recentSessions.slice(0, 8).map((s: any) => (
-                    <div key={s.id} className="p-3 bg-slate-50 rounded border border-slate-100 hover:border-emerald-300 cursor-pointer transition-colors"
-                      onClick={() => router.push(`/dashboard?session_id=${s.id}`)}>
-                      <p className="text-sm font-medium font-mono text-slate-700 truncate">{s.id}</p>
-                    </div>
-                  ))}
+                  {recentSessions.slice(0, 8).map((s: any) => {
+                    const isSelected = selectedSessions.includes(s.id);
+                    return (
+                      <div key={s.id} className={`p-3 bg-slate-50 rounded border ${isSelected ? 'border-emerald-500 bg-emerald-50/50' : 'border-slate-100 hover:border-emerald-300'} cursor-pointer transition-colors flex items-center gap-3`}
+                        onClick={() => {
+                          if (isSelected) {
+                            setSelectedSessions(prev => prev.filter(id => id !== s.id));
+                          } else {
+                            if (selectedSessions.length < 2) {
+                              setSelectedSessions(prev => [...prev, s.id]);
+                            } else {
+                              // Replace the second one
+                              setSelectedSessions([selectedSessions[0], s.id]);
+                            }
+                          }
+                        }}>
+                        <div className={`w-4 h-4 rounded-full border flex-shrink-0 flex items-center justify-center ${isSelected ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-slate-300'}`}>
+                          {isSelected && <div className="w-2 h-2 rounded-full bg-white" />}
+                        </div>
+                        <p className="text-sm font-medium font-mono text-slate-700 truncate">{s.id}</p>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
+            {selectedSessions.length > 0 && (
+              <CardFooter className="flex flex-col gap-2">
+                <Button 
+                  variant="outline" 
+                  className="w-full"
+                  disabled={selectedSessions.length !== 1}
+                  onClick={() => router.push(`/dashboard?session_id=${selectedSessions[0]}`)}
+                >
+                  Open Session
+                </Button>
+                <Button 
+                  className="w-full bg-blue-600 hover:bg-blue-700"
+                  disabled={selectedSessions.length !== 2}
+                  onClick={() => router.push(`/compare?s1=${selectedSessions[0]}&s2=${selectedSessions[1]}`)}
+                >
+                  Compare ({selectedSessions.length}/2)
+                </Button>
+              </CardFooter>
+            )}
           </Card>
         </div>
 

@@ -79,3 +79,24 @@ export async function listSessions() {
   if (!res.ok) return [];
   return res.json();
 }
+
+export async function compareSessions(s1: string, s2: string) {
+  const res = await fetch(`${API_BASE}/compare?s1=${s1}&s2=${s2}`);
+  if (!res.ok) throw new Error("Failed to fetch comparison");
+  return res.json();
+}
+
+export async function exportComparison(s1: string, s2: string) {
+  const res = await fetch(`${API_BASE}/compare/export?s1=${s1}&s2=${s2}`);
+  if (!res.ok) throw new Error("Failed to export comparison");
+  
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `comparison_${s1}_${s2}.md`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}

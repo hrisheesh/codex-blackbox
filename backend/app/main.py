@@ -6,7 +6,8 @@ import datetime
 from .schemas import (
     StartSessionRequest, StartSessionResponse, StopSessionResponse,
     PromptNoteRequest, ReviewRequest, GenerateReportResponse,
-    LiveMetricsResponse, FileChurnSchema
+    LiveMetricsResponse, FileChurnSchema, SessionSummarySchema,
+    CompareSessionsResponse, ComparisonResultSchema
 )
 from fastapi.responses import StreamingResponse
 import io
@@ -398,3 +399,147 @@ async def list_sessions():
             if os.path.isdir(os.path.join(SESSIONS_DIR, s)):
                 sessions.append({"id": s})
     return sorted(sessions, key=lambda x: x["id"], reverse=True)
+
+def get_session_summary(session_id: str) -> SessionSummarySchema:
+    db = get_session_local(session_id)
+    try:
+        session = db.query(Session).filter(Session.id == session_id).first()
+        if not session:
+            raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
+        
+        file_churns = db.query(FileChurn).filter(FileChurn.session_id == session_id).all()
+        events_count = db.query(FileEvent).filter(FileEvent.session_id == session_id).count()
+        
+        # Calculate metrics
+        duration = session.duration_seconds
+        if session.status == "recording":
+            duration = int((datetime.datetime.utcnow() - session.created_at).total_seconds())
+            
+        files_touched = len(file_churns)
+        total_written = sum(c.total_lines_written for c in file_churns)
+        total_deleted = sum(c.total_lines_deleted for c in file_churns)
+        current_lines = sum(c.current_lines for c in file_churns)
+        overall_wa = total_written / max(current_lines, 1) if current_lines > 0 else 0
+        
+        files_created = sum(1 for c in file_churns if c.created)
+        files_deleted = sum(1 for c in file_churns if c.deleted)
+        files_recreated = sum(1 for c in file_churns if c.recreated_count > 0)
+        
+        compaction_analytics = generate_compaction_analytics(db, session_id)
+        suspicious_patterns = detect_suspicious_patterns(db, session_id)
+        
+        # We also need quality score, try to read from review
+        from .models import Review
+        review = db.query(Review).filter(Review.session_id == session_id).first()
+        quality_score = review.quality_score if review else None
+        
+        # Count tool calls (codex_log_marker where type not compact)
+        tool_calls = db.query(FileEvent).filter(
+            FileEvent.session_id == session_id,
+            FileEvent.type == "codex_log_marker",
+            FileEvent.change_kind != "compact"
+        ).count()
+        
+        return SessionSummarySchema(
+            session_id=session_id,
+            duration_seconds=duration,
+            file_events_count=events_count,
+            files_touched=files_touched,
+            total_lines_written=total_written,
+            total_lines_deleted=total_deleted,
+            write_amplification=overall_wa,
+            files_created=files_created,
+            files_deleted=files_deleted,
+            files_recreated=files_recreated,
+            possible_compactions=len(compaction_analytics),
+            possible_tool_calls=tool_calls,
+            suspicious_patterns=len(suspicious_patterns),
+            quality_score=quality_score
+        )
+    finally:
+        db.close()
+
+def _compare_summaries(s1: SessionSummarySchema, s2: SessionSummarySchema) -> ComparisonResultSchema:
+    # Heuristics
+    # more efficient: lower WA, lower duration.
+    eff1 = 0
+    eff2 = 0
+    if s1.write_amplification < s2.write_amplification: eff1 += 1
+    elif s2.write_amplification < s1.write_amplification: eff2 += 1
+    if s1.duration_seconds < s2.duration_seconds: eff1 += 1
+    elif s2.duration_seconds < s1.duration_seconds: eff2 += 1
+    
+    more_efficient = s1.session_id if eff1 > eff2 else s2.session_id if eff2 > eff1 else "tie"
+    
+    # more churn: higher lines written + deleted, higher WA
+    churn1 = s1.total_lines_written + s1.total_lines_deleted
+    churn2 = s2.total_lines_written + s2.total_lines_deleted
+    more_churn = s1.session_id if churn1 > churn2 else s2.session_id if churn2 > churn1 else "tie"
+    
+    # quality trend
+    quality_trend = "unknown"
+    if s1.quality_score is not None and s2.quality_score is not None:
+        if s2.quality_score > s1.quality_score:
+            quality_trend = "improved"
+        elif s2.quality_score < s1.quality_score:
+            quality_trend = "worsened"
+        else:
+            quality_trend = "unchanged"
+            
+    return ComparisonResultSchema(
+        more_efficient=more_efficient,
+        more_churn=more_churn,
+        quality_trend=quality_trend
+    )
+
+@app.get("/api/compare", response_model=CompareSessionsResponse)
+async def compare_sessions(s1: str, s2: str):
+    summary1 = get_session_summary(s1)
+    summary2 = get_session_summary(s2)
+    comp = _compare_summaries(summary1, summary2)
+    return CompareSessionsResponse(session1=summary1, session2=summary2, comparison=comp)
+
+@app.get("/api/compare/export")
+async def export_comparison(s1: str, s2: str):
+    summary1 = get_session_summary(s1)
+    summary2 = get_session_summary(s2)
+    comp = _compare_summaries(summary1, summary2)
+    
+    md = f"# Session Comparison Report\n\n"
+    md += f"**Session 1**: `{s1}`\n"
+    md += f"**Session 2**: `{s2}`\n\n"
+    
+    md += f"## Conclusions\n"
+    md += f"- **More Efficient**: `{comp.more_efficient}`\n"
+    md += f"- **More Churn**: `{comp.more_churn}`\n"
+    md += f"- **Quality Trend**: {comp.quality_trend}\n\n"
+    
+    md += f"## Metrics Side-by-Side\n\n"
+    md += f"| Metric | Session 1 | Session 2 |\n"
+    md += f"|---|---|---|\n"
+    
+    def fmttime(s):
+        m = s // 60
+        sec = s % 60
+        return f"{m}m {sec}s"
+        
+    md += f"| Duration | {fmttime(summary1.duration_seconds)} | {fmttime(summary2.duration_seconds)} |\n"
+    md += f"| Quality Score | {summary1.quality_score or 'N/A'} | {summary2.quality_score or 'N/A'} |\n"
+    md += f"| File Events | {summary1.file_events_count} | {summary2.file_events_count} |\n"
+    md += f"| Files Touched | {summary1.files_touched} | {summary2.files_touched} |\n"
+    md += f"| Lines Written | {summary1.total_lines_written} | {summary2.total_lines_written} |\n"
+    md += f"| Lines Deleted | {summary1.total_lines_deleted} | {summary2.total_lines_deleted} |\n"
+    md += f"| Write Amplification | {summary1.write_amplification:.2f}x | {summary2.write_amplification:.2f}x |\n"
+    md += f"| Files Created | {summary1.files_created} | {summary2.files_created} |\n"
+    md += f"| Files Deleted | {summary1.files_deleted} | {summary2.files_deleted} |\n"
+    md += f"| Files Recreated | {summary1.files_recreated} | {summary2.files_recreated} |\n"
+    md += f"| Possible Compactions | {summary1.possible_compactions} | {summary2.possible_compactions} |\n"
+    md += f"| Possible Tool Calls | {summary1.possible_tool_calls} | {summary2.possible_tool_calls} |\n"
+    md += f"| Suspicious Patterns | {summary1.suspicious_patterns} | {summary2.suspicious_patterns} |\n"
+    
+    buffer = io.BytesIO(md.encode('utf-8'))
+    return StreamingResponse(
+        buffer,
+        media_type="text/markdown",
+        headers={"Content-Disposition": f"attachment; filename=comparison_{s1}_{s2}.md"}
+    )
