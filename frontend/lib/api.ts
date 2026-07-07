@@ -70,6 +70,7 @@ export async function generateReport(sessionId: string) {
 
 export async function getLiveMetrics(sessionId: string) {
   const res = await fetch(`${API_BASE}/sessions/${sessionId}`);
+  if (res.status === 404) return { error: "not_found" };
   if (!res.ok) throw new Error("Failed to get live metrics");
   return res.json();
 }

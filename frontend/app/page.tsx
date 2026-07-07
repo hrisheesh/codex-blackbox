@@ -6,8 +6,8 @@ import { startSession, listSessions } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Activity, Folder, Play } from "lucide-react";
+import { Activity, Folder, Play, CheckSquare, Square, ChevronRight } from "lucide-react";
+import { motion } from "framer-motion";
 
 export default function Home() {
   const router = useRouter();
@@ -37,140 +37,170 @@ export default function Home() {
     }
   };
 
+  const toggleSession = (id: string) => {
+    if (selectedSessions.includes(id)) {
+      setSelectedSessions(selectedSessions.filter(s => s !== id));
+    } else {
+      if (selectedSessions.length < 2) {
+        setSelectedSessions([...selectedSessions, id]);
+      }
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-slate-50 p-8 flex items-center justify-center">
-      <div className="max-w-5xl w-full grid grid-cols-1 md:grid-cols-3 gap-8">
-        
-        <div className="md:col-span-2">
-          <Card className="shadow-lg border-slate-200">
-            <CardHeader className="bg-slate-900 text-white rounded-t-xl">
-              <CardTitle className="text-2xl flex items-center gap-2">
-                <Activity className="h-6 w-6 text-emerald-400" />
-                codex-blackbox
-              </CardTitle>
-              <CardDescription className="text-slate-300">
-                Local real-time observability for AI coding agents
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="pt-6">
-              <form onSubmit={handleStart} className="space-y-6">
-                <div className="space-y-2">
-                  <Label htmlFor="projectPath">Project Folder Path *</Label>
-                  <div className="flex gap-2">
-                    <Folder className="h-10 w-10 p-2 bg-slate-100 text-slate-500 rounded-md border border-slate-200" />
-                    <Input 
-                      id="projectPath" 
-                      placeholder="/Users/name/projects/my-app" 
-                      value={projectPath}
-                      onChange={(e) => setProjectPath(e.target.value)}
-                      required
-                      className="h-10 text-base"
-                    />
+    <div className="container mx-auto px-4 py-12 max-w-[1200px] flex gap-12 flex-col lg:flex-row">
+      
+      {/* Main Start Form */}
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex-1"
+      >
+        <div className="glass-card rounded-2xl border border-border/40 overflow-hidden shadow-2xl relative">
+          <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-primary via-chart-4 to-chart-2" />
+          <div className="p-8 pb-6 border-b border-white/5 bg-white/5">
+            <h1 className="text-3xl font-bold tracking-tight text-foreground flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+                <Activity className="w-5 h-5 text-primary" />
+              </div>
+              Start Session
+            </h1>
+            <p className="text-muted-foreground mt-2 text-sm ml-13">
+              Configure your environment to begin real-time agent observability.
+            </p>
+          </div>
+          
+          <div className="p-8">
+            <form onSubmit={handleStart} className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="projectPath" className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Project Folder Path *</Label>
+                <div className="flex gap-3">
+                  <div className="h-12 w-12 shrink-0 bg-white/5 flex items-center justify-center rounded-lg border border-border/50">
+                    <Folder className="h-5 w-5 text-muted-foreground" />
                   </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="sessionName">Session Name (Optional)</Label>
-                    <Input 
-                      id="sessionName" 
-                      placeholder="e.g. Add dark mode" 
-                      value={sessionName}
-                      onChange={(e) => setSessionName(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="codexLogPath">Agent Log Path (Optional)</Label>
-                    <Input 
-                      id="codexLogPath" 
-                      placeholder="~/.codex" 
-                      value={codexLogPath}
-                      onChange={(e) => setCodexLogPath(e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="promptNote">Initial Prompt Note (Optional)</Label>
                   <Input 
-                    id="promptNote" 
-                    placeholder="What are you asking the agent to do?" 
-                    value={promptNote}
-                    onChange={(e) => setPromptNote(e.target.value)}
+                    id="projectPath" 
+                    placeholder="/Users/name/projects/my-app" 
+                    value={projectPath}
+                    onChange={(e) => setProjectPath(e.target.value)}
+                    required
+                    className="h-12 text-base bg-black/20 border-border/50 focus:ring-primary/50"
                   />
                 </div>
+              </div>
 
-                <Button type="submit" disabled={isLoading} className="w-full bg-emerald-600 hover:bg-emerald-700 h-12 text-lg">
-                  {isLoading ? "Starting..." : (
-                    <>
-                      <Play className="mr-2 h-5 w-5" /> Start Recording
-                    </>
-                  )}
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="md:col-span-1">
-          <Card>
-            <CardHeader>
-              <CardTitle>Recent Sessions</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {recentSessions.length === 0 ? (
-                <p className="text-sm text-slate-500">No recent sessions found.</p>
-              ) : (
-                <div className="space-y-3">
-                  {recentSessions.slice(0, 8).map((s: any) => {
-                    const isSelected = selectedSessions.includes(s.id);
-                    return (
-                      <div key={s.id} className={`p-3 bg-slate-50 rounded border ${isSelected ? 'border-emerald-500 bg-emerald-50/50' : 'border-slate-100 hover:border-emerald-300'} cursor-pointer transition-colors flex items-center gap-3`}
-                        onClick={() => {
-                          if (isSelected) {
-                            setSelectedSessions(prev => prev.filter(id => id !== s.id));
-                          } else {
-                            if (selectedSessions.length < 2) {
-                              setSelectedSessions(prev => [...prev, s.id]);
-                            } else {
-                              // Replace the second one
-                              setSelectedSessions([selectedSessions[0], s.id]);
-                            }
-                          }
-                        }}>
-                        <div className={`w-4 h-4 rounded-full border flex-shrink-0 flex items-center justify-center ${isSelected ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-slate-300'}`}>
-                          {isSelected && <div className="w-2 h-2 rounded-full bg-white" />}
-                        </div>
-                        <p className="text-sm font-medium font-mono text-slate-700 truncate">{s.id}</p>
-                      </div>
-                    );
-                  })}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <Label htmlFor="sessionName" className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Session Name (Optional)</Label>
+                  <Input 
+                    id="sessionName" 
+                    placeholder="e.g. Add dark mode" 
+                    value={sessionName}
+                    onChange={(e) => setSessionName(e.target.value)}
+                    className="h-12 bg-black/20 border-border/50 focus:ring-primary/50"
+                  />
                 </div>
-              )}
-            </CardContent>
-            {selectedSessions.length > 0 && (
-              <CardFooter className="flex flex-col gap-2">
-                <Button 
-                  variant="outline" 
-                  className="w-full"
-                  disabled={selectedSessions.length !== 1}
-                  onClick={() => router.push(`/dashboard?session_id=${selectedSessions[0]}`)}
-                >
-                  Open Session
-                </Button>
-                <Button 
-                  className="w-full bg-blue-600 hover:bg-blue-700"
-                  disabled={selectedSessions.length !== 2}
-                  onClick={() => router.push(`/compare?s1=${selectedSessions[0]}&s2=${selectedSessions[1]}`)}
-                >
-                  Compare ({selectedSessions.length}/2)
-                </Button>
-              </CardFooter>
-            )}
-          </Card>
-        </div>
+                <div className="space-y-2">
+                  <Label htmlFor="codexLogPath" className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Agent Log Path (Optional)</Label>
+                  <Input 
+                    id="codexLogPath" 
+                    placeholder="~/.codex" 
+                    value={codexLogPath}
+                    onChange={(e) => setCodexLogPath(e.target.value)}
+                    className="h-12 bg-black/20 border-border/50 focus:ring-primary/50"
+                  />
+                </div>
+              </div>
 
-      </div>
+              <div className="space-y-2">
+                <Label htmlFor="promptNote" className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Initial Prompt Note (Optional)</Label>
+                <Input 
+                  id="promptNote" 
+                  placeholder="What are you asking the agent to do?" 
+                  value={promptNote}
+                  onChange={(e) => setPromptNote(e.target.value)}
+                  className="h-12 bg-black/20 border-border/50 focus:ring-primary/50"
+                />
+              </div>
+
+              <div className="pt-4">
+                <Button 
+                  type="submit" 
+                  disabled={isLoading} 
+                  className="w-full h-12 text-base font-semibold bg-primary text-primary-foreground hover:bg-primary/90 shadow-[0_0_20px_rgba(var(--primary),0.3)] transition-all"
+                >
+                  <Play className="mr-2 h-5 w-5" fill="currentColor" />
+                  {isLoading ? "Starting..." : "Start Recording"}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Sidebar - Recent Sessions */}
+      <motion.div 
+        initial={{ opacity: 0, x: 20 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ delay: 0.2 }}
+        className="w-full lg:w-80 flex flex-col"
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-bold text-foreground">Recent Sessions</h3>
+          {selectedSessions.length === 2 && (
+            <Button 
+              size="sm" 
+              onClick={() => router.push(`/compare?s1=${selectedSessions[0]}&s2=${selectedSessions[1]}`)}
+              className="h-8 bg-chart-4 hover:bg-chart-4/80 text-white text-xs"
+            >
+              Compare <ChevronRight className="w-3 h-3 ml-1" />
+            </Button>
+          )}
+        </div>
+        
+        <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar pr-2 max-h-[600px]">
+          {recentSessions.length === 0 ? (
+            <div className="p-6 text-center text-muted-foreground bg-white/5 rounded-xl border border-white/5 text-sm">
+              No sessions recorded yet.
+            </div>
+          ) : (
+            recentSessions.map((s, i) => {
+              const isSelected = selectedSessions.includes(s.id);
+              const isSelectable = selectedSessions.length < 2 || isSelected;
+
+              return (
+                <div key={i} className={`group flex flex-col glass-card rounded-xl border transition-all ${isSelected ? 'border-chart-4 bg-chart-4/5' : 'border-border/30 hover:border-white/20'}`}>
+                  <div className="p-4 flex items-start gap-3">
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); toggleSession(s.id); }}
+                      disabled={!isSelectable}
+                      className={`mt-1 shrink-0 transition-colors ${isSelected ? 'text-chart-4' : 'text-muted-foreground group-hover:text-foreground'} ${!isSelectable && 'opacity-50 cursor-not-allowed'}`}
+                    >
+                      {isSelected ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5" />}
+                    </button>
+                    <div 
+                      className="flex-1 min-w-0 cursor-pointer"
+                      onClick={() => router.push(`/dashboard?session_id=${s.id}`)}
+                    >
+                      <p className="font-semibold text-sm text-foreground truncate">{s.name || s.id}</p>
+                      <p className="text-xs text-muted-foreground truncate">{s.project_path ? s.project_path.split('/').pop() : 'Unknown Project'}</p>
+                      <div className="flex gap-2 mt-2">
+                        {s.status === "recording" && (
+                          <span className="text-[10px] uppercase font-bold text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded">Recording</span>
+                        )}
+                        {s.quality_score && (
+                          <span className="text-[10px] uppercase font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded">Score: {s.quality_score}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </motion.div>
+
     </div>
   );
 }

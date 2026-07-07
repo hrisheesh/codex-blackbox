@@ -3,14 +3,12 @@
 import { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { getLiveMetrics, stopSession, addReview, generateReport, addPromptNote, exportSession } from "@/lib/api";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { MetricWidget } from "@/components/dashboard/MetricWidget";
+import { TimelinePanel } from "@/components/dashboard/TimelinePanel";
+import { AnalysisSection } from "@/components/dashboard/AnalysisSection";
+import { ReviewModal } from "@/components/dashboard/ReviewModal";
+import { Activity, Clock, FileCode2, Files, RefreshCw, Square, Download, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Activity, Clock, FileCode2, Files, RefreshCw, Square, Download, ListTree, BarChart2, FileText, FilePlus, FileMinus, FileEdit, AlertTriangle, ShieldAlert, Lightbulb } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid, Cell } from 'recharts';
 
 function DashboardContent() {
   const searchParams = useSearchParams();
@@ -19,6 +17,8 @@ function DashboardContent() {
   
   const [metrics, setMetrics] = useState<any>(null);
   const [status, setStatus] = useState("loading");
+  const [error, setError] = useState<string | null>(null);
+  
   const [showReview, setShowReview] = useState(false);
   const [review, setReview] = useState({ 
     quality_score: 5, 
@@ -29,19 +29,23 @@ function DashboardContent() {
     notes: "" 
   });
   const [reportGenerated, setReportGenerated] = useState(false);
-  const [newNote, setNewNote] = useState("");
   const [isAddingNote, setIsAddingNote] = useState(false);
 
   useEffect(() => {
     if (!sessionId) return;
 
-    // Initial fetch
     getLiveMetrics(sessionId).then(data => {
+      if (data.error === "not_found") {
+        setError("not_found");
+        return;
+      }
       setMetrics(data);
       setStatus(data.status);
-    }).catch(console.error);
+    }).catch(err => {
+      console.error(err);
+      setError("unknown_error");
+    });
 
-    // WebSocket connection
     const ws = new WebSocket(`ws://localhost:8000/ws/sessions/${sessionId}`);
     
     ws.onmessage = (event) => {
@@ -76,663 +80,181 @@ function DashboardContent() {
     try {
       await exportSession(sessionId);
     } catch (err) {
-      console.error("Failed to export session:", err);
+      console.error(err);
       alert("Failed to export session.");
     }
   };
 
-  const handleAddNote = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!sessionId || !newNote.trim()) return;
+  const handleAddNote = async (note: string) => {
+    if (!sessionId) return;
     setIsAddingNote(true);
     try {
-      await addPromptNote(sessionId, newNote);
-      setNewNote("");
-    } catch (err) {
-      console.error(err);
+      await addPromptNote(sessionId, note);
     } finally {
       setIsAddingNote(false);
     }
   };
 
-  if (!sessionId) return <div className="flex h-screen items-center justify-center font-mono text-slate-500">No session ID provided.</div>;
-  if (!metrics) return (
-    <div className="flex h-screen items-center justify-center">
-      <div className="flex flex-col items-center gap-4">
-        <Activity className="h-8 w-8 text-blue-500 animate-bounce" />
-        <p className="text-slate-500 font-medium">Loading session telemetry...</p>
+  if (!sessionId) return <div className="flex h-[80vh] items-center justify-center text-muted-foreground">No session ID provided.</div>;
+  
+  if (error === "not_found") {
+    return (
+      <div className="flex flex-col h-[80vh] items-center justify-center text-center space-y-6 max-w-md mx-auto">
+        <div className="w-20 h-20 bg-rose-500/10 text-rose-500 rounded-full flex items-center justify-center">
+          <AlertTriangle className="w-10 h-10" />
+        </div>
+        <div>
+          <h2 className="text-2xl font-bold mb-2">Session Not Found</h2>
+          <p className="text-muted-foreground">The session ID "{sessionId}" does not exist in the database or has been deleted.</p>
+        </div>
+        <Button onClick={() => router.push("/")} className="bg-primary hover:bg-primary/90 text-primary-foreground">
+          Return Home
+        </Button>
       </div>
-    </div>
-  );
+    );
+  }
 
-  const formatDuration = (sec: number) => {
-    const m = Math.floor(sec / 60);
-    const s = sec % 60;
-    return `${m}m ${s}s`;
-  };
+  if (error) return <div className="flex h-[80vh] items-center justify-center text-destructive">An error occurred loading the session.</div>;
+  if (!metrics) return <div className="flex h-[80vh] items-center justify-center text-muted-foreground">Loading session data...</div>;
+
+  const getStatusColor = () => status === "recording" ? "bg-emerald-500" : "bg-slate-500";
 
   return (
-    <div className="min-h-screen bg-[#FAFAFA] p-6 lg:p-10 font-sans selection:bg-blue-100">
-      <div className="max-w-[1400px] mx-auto space-y-8">
-        
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 pb-6 border-b border-slate-200/60">
-          <div>
-            <div className="flex items-center gap-3 mb-2">
-              <div className={`p-2 rounded-xl ${status === "recording" ? "bg-emerald-100 text-emerald-600" : "bg-slate-200 text-slate-500"}`}>
-                <Activity className={`w-6 h-6 ${status === "recording" ? "animate-pulse" : ""}`} />
-              </div>
-              <h1 className="text-3xl font-bold tracking-tight text-slate-900">Session Observability</h1>
-            </div>
-            <div className="flex items-center gap-3 ml-1">
-              <span className="text-sm font-medium text-slate-500 bg-white px-3 py-1 rounded-full border shadow-sm flex items-center gap-2">
-                <span className={`w-2 h-2 rounded-full ${status === "recording" ? "bg-emerald-500 animate-pulse" : "bg-slate-400"}`}></span>
-                {status === "recording" ? "Live Recording" : "Session Stopped"}
-              </span>
-              <span className="text-sm font-mono text-slate-400">{sessionId}</span>
-            </div>
+    <div className="container mx-auto px-4 py-8 max-w-[1600px]">
+      {/* Header Actions */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+        <div>
+          <div className="flex items-center gap-3 mb-2">
+            <h1 className="text-3xl font-bold tracking-tight text-foreground">{sessionId}</h1>
+            <span className={`px-2 py-1 rounded-full text-xs font-semibold uppercase tracking-wider text-white ${getStatusColor()}`}>
+              {status}
+            </span>
           </div>
-          
-          <div className="flex gap-3">
-            {status === "recording" ? (
-              <Button onClick={handleStop} variant="destructive" className="shadow-lg shadow-red-500/20 rounded-full px-6 transition-transform hover:scale-105 active:scale-95">
-                <Square className="h-4 w-4 mr-2" fill="currentColor" /> Stop Session
-              </Button>
-            ) : (
-              <div className="flex items-center gap-3">
-                {!reportGenerated && (
-                  <Button onClick={() => setShowReview(true)} variant="outline" className="rounded-full shadow-sm">
-                    Complete Audit Review
-                  </Button>
-                )}
-                {reportGenerated && (
-                  <Button onClick={handleExport} className="bg-blue-600 hover:bg-blue-700 rounded-full shadow-lg shadow-blue-500/20">
-                    <Download className="mr-2 h-4 w-4" /> Export LLM Audit Bundle
-                  </Button>
-                )}
-              </div>
-            )}
-          </div>
+          <p className="text-muted-foreground font-mono text-sm">{metrics.project_path}</p>
         </div>
-
-        {/* Top Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
-          <Card className="border-0 shadow-sm ring-1 ring-slate-200/50 bg-white/60 backdrop-blur-xl overflow-hidden relative group">
-            <div className="absolute top-0 left-0 w-1 h-full bg-blue-500 opacity-80" />
-            <CardContent className="p-6">
-              <div className="flex justify-between items-start">
-                <div className="space-y-2">
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Duration</p>
-                  <p className="text-3xl font-bold text-slate-900 tracking-tight">{formatDuration(metrics.duration_seconds)}</p>
-                </div>
-                <div className="p-3 bg-blue-50 rounded-2xl text-blue-500 group-hover:scale-110 transition-transform">
-                  <Clock className="w-5 h-5" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-0 shadow-sm ring-1 ring-slate-200/50 bg-white/60 backdrop-blur-xl overflow-hidden relative group">
-            <div className="absolute top-0 left-0 w-1 h-full bg-violet-500 opacity-80" />
-            <CardContent className="p-6">
-              <div className="flex justify-between items-start">
-                <div className="space-y-2">
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Files Touched</p>
-                  <p className="text-3xl font-bold text-slate-900 tracking-tight">{metrics.files_touched}</p>
-                </div>
-                <div className="p-3 bg-violet-50 rounded-2xl text-violet-500 group-hover:scale-110 transition-transform">
-                  <Files className="w-5 h-5" />
-                </div>
-              </div>
-              <div className="mt-4 flex gap-4 text-sm font-medium">
-                <span className="flex items-center gap-1 text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md"><FilePlus className="w-3 h-3"/> {metrics.files_created} created</span>
-                <span className="flex items-center gap-1 text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md"><FileMinus className="w-3 h-3"/> {metrics.files_deleted} deleted</span>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-0 shadow-sm ring-1 ring-slate-200/50 bg-white/60 backdrop-blur-xl overflow-hidden relative group">
-            <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500 opacity-80" />
-            <CardContent className="p-6">
-              <div className="flex justify-between items-start">
-                <div className="space-y-2">
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Code Volatility</p>
-                  <div className="flex items-baseline gap-3">
-                    <span className="text-3xl font-bold text-emerald-600 tracking-tight">+{metrics.total_lines_written}</span>
-                    <span className="text-xl font-semibold text-rose-500">-{metrics.total_lines_deleted}</span>
-                  </div>
-                </div>
-                <div className="p-3 bg-emerald-50 rounded-2xl text-emerald-600 group-hover:scale-110 transition-transform">
-                  <FileCode2 className="w-5 h-5" />
-                </div>
-              </div>
-              <p className="mt-4 text-xs font-medium text-slate-400 uppercase tracking-wider">Total Lines Mutated</p>
-            </CardContent>
-          </Card>
-
-          <Card className="border-0 shadow-sm ring-1 ring-slate-200/50 bg-white/60 backdrop-blur-xl overflow-hidden relative group">
-            <div className="absolute top-0 left-0 w-1 h-full bg-amber-500 opacity-80" />
-            <CardContent className="p-6">
-              <div className="flex justify-between items-start">
-                <div className="space-y-2">
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Write Amplification</p>
-                  <p className="text-3xl font-bold text-slate-900 tracking-tight">{metrics.write_amplification.toFixed(2)}x</p>
-                </div>
-                <div className="p-3 bg-amber-50 rounded-2xl text-amber-500 group-hover:scale-110 transition-transform">
-                  <RefreshCw className="w-5 h-5" />
-                </div>
-              </div>
-              <div className="mt-4 w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
-                <div 
-                  className="bg-amber-500 h-full rounded-full" 
-                  style={{ width: `${Math.min((metrics.write_amplification / 5) * 100, 100)}%` }}
-                />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-          
-          {/* Main Content Area */}
-          <div className="xl:col-span-2 space-y-8">
-            
-            {/* Visual Charts */}
-            <Card className="border-0 shadow-sm ring-1 ring-slate-200/50 overflow-hidden bg-white">
-              <CardHeader className="border-b border-slate-100 bg-slate-50/50">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="text-lg flex items-center gap-2 text-slate-800">
-                      <BarChart2 className="w-5 h-5 text-indigo-500" /> Top Churned Files
-                    </CardTitle>
-                    <CardDescription className="mt-1">Volume of lines written vs deleted across files</CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="p-6">
-                <div className="h-[320px] w-full">
-                  {metrics.file_churns.length > 0 ? (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart
-                        data={metrics.file_churns.sort((a:any, b:any) => b.total_lines_written - a.total_lines_written).slice(0, 10).map((f:any) => ({
-                          name: f.path.split('/').pop(),
-                          Written: f.total_lines_written,
-                          Deleted: f.total_lines_deleted
-                        }))}
-                        margin={{ top: 20, right: 20, left: 0, bottom: 0 }}
-                        barSize={32}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                        <XAxis dataKey="name" tick={{fontSize: 12, fill: '#64748b'}} tickLine={false} axisLine={false} dy={10} />
-                        <YAxis tick={{fontSize: 12, fill: '#64748b'}} tickLine={false} axisLine={false} dx={-10} />
-                        <Tooltip 
-                          cursor={{fill: '#f8fafc'}}
-                          contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
-                        />
-                        <Legend wrapperStyle={{paddingTop: '20px'}} iconType="circle" />
-                        <Bar dataKey="Written" stackId="a" fill="#10b981" radius={[0, 0, 4, 4]} />
-                        <Bar dataKey="Deleted" stackId="a" fill="#f43f5e" radius={[4, 4, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div className="flex h-full items-center justify-center text-slate-400">
-                      No churn data available yet.
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* List of Files instead of dense table */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between px-1">
-                <h2 className="text-xl font-semibold text-slate-800 tracking-tight">Active Files</h2>
-                <span className="text-sm font-medium text-slate-500">{metrics.file_churns.length} files tracked</span>
-              </div>
-              
-              {metrics.file_churns.length === 0 ? (
-                <div className="p-12 text-center rounded-2xl border border-dashed border-slate-300 bg-white">
-                  <FileEdit className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-                  <p className="text-slate-500 font-medium">Waiting for file modifications...</p>
-                </div>
-              ) : (
-                <div className="grid gap-3">
-                  {metrics.file_churns.sort((a:any, b:any) => b.total_lines_written - a.total_lines_written).map((file: any) => (
-                    <div key={file.path} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-white rounded-xl shadow-sm border border-slate-100 hover:border-blue-100 hover:shadow-md transition-all group gap-4">
-                      
-                      <div className="flex items-start gap-4">
-                        <div className="p-2.5 bg-slate-50 text-slate-400 rounded-lg group-hover:bg-blue-50 group-hover:text-blue-500 transition-colors">
-                          <FileText className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <p className="font-mono text-sm text-slate-700 font-semibold mb-1 truncate max-w-[250px] sm:max-w-[400px]" title={file.path}>
-                            {file.path}
-                          </p>
-                          <div className="flex gap-2">
-                            {file.created && <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 text-[10px] font-bold uppercase tracking-wider rounded-md">Created</span>}
-                            {file.deleted && <span className="px-2 py-0.5 bg-rose-50 text-rose-700 text-[10px] font-bold uppercase tracking-wider rounded-md">Deleted</span>}
-                            {file.recreated_count > 0 && <span className="px-2 py-0.5 bg-amber-50 text-amber-700 text-[10px] font-bold uppercase tracking-wider rounded-md">Recreated ×{file.recreated_count}</span>}
-                            {file.rewrite_count > 0 && <span className="px-2 py-0.5 bg-violet-50 text-violet-700 text-[10px] font-bold uppercase tracking-wider rounded-md">Rewrite ×{file.rewrite_count}</span>}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-wrap sm:flex-nowrap items-center gap-6 sm:gap-8 ml-12 sm:ml-0">
-                        <div className="text-center sm:text-right">
-                          <p className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider mb-1">Mods</p>
-                          <p className="text-sm font-medium text-slate-700">{file.modify_count}</p>
-                        </div>
-                        <div className="text-center sm:text-right">
-                          <p className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider mb-1">Current</p>
-                          <p className="text-sm font-medium text-slate-700">{file.current_lines}</p>
-                        </div>
-                        <div className="text-center sm:text-right">
-                          <p className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider mb-1">Churn</p>
-                          <div className="flex items-center gap-2 text-sm font-medium">
-                            <span className="text-emerald-600">+{file.total_lines_written}</span>
-                            <span className="text-rose-500">-{file.total_lines_deleted}</span>
-                          </div>
-                        </div>
-                        <div className="text-center sm:text-right">
-                          <p className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider mb-1">WA</p>
-                          <span className="inline-flex items-center justify-center px-2 py-1 bg-slate-100 text-slate-600 text-xs font-bold rounded-md min-w-[3rem]">
-                            {file.write_amplification.toFixed(1)}x
-                          </span>
-                        </div>
-                      </div>
-
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Compaction Analytics */}
-            {metrics.compaction_analytics && metrics.compaction_analytics.length > 0 && (
-              <div className="space-y-4 pt-6 border-t border-slate-200">
-                <div className="flex items-center justify-between px-1">
-                  <h2 className="text-xl font-semibold text-slate-800 tracking-tight flex items-center gap-2">
-                    <AlertTriangle className="w-5 h-5 text-amber-500" />
-                    Compaction Observable Behavior
-                  </h2>
-                  <span className="text-sm font-medium text-slate-500">{metrics.compaction_analytics.length} compactions detected</span>
-                </div>
-                
-                <div className="grid gap-4">
-                  {metrics.compaction_analytics.map((comp: any, idx: number) => (
-                    <Card key={idx} className="border-0 shadow-sm ring-1 ring-amber-200 bg-amber-50/30 overflow-hidden relative">
-                      <div className="absolute top-0 left-0 w-1 h-full bg-amber-400 opacity-80" />
-                      <CardHeader className="py-4 border-b border-amber-100/50 bg-amber-50/50">
-                        <div className="flex justify-between items-center">
-                          <CardTitle className="text-base text-slate-800 font-semibold">
-                            Compaction at {new Date(comp.timestamp).toLocaleTimeString()}
-                          </CardTitle>
-                          <span className="text-xs font-medium bg-white border border-slate-200 px-2 py-1 rounded-md text-slate-500 shadow-sm">
-                            {comp.events_after} events followed
-                          </span>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="p-4 grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="space-y-4">
-                          <div>
-                            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Churn Before → After</p>
-                            <div className="flex items-center gap-4 text-sm bg-white p-3 rounded-lg border border-slate-100 shadow-sm">
-                              <div className="flex-1 text-center border-r border-slate-100">
-                                <span className="block text-emerald-600 font-bold">+{comp.churn_before.written}</span>
-                                <span className="block text-rose-500 font-bold">-{comp.churn_before.deleted}</span>
-                              </div>
-                              <div className="flex-1 text-center">
-                                <span className="block text-emerald-600 font-bold">+{comp.churn_after.written}</span>
-                                <span className="block text-rose-500 font-bold">-{comp.churn_after.deleted}</span>
-                              </div>
-                            </div>
-                          </div>
-                          <div>
-                            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Repeated Tools/Markers</p>
-                            {comp.repeated_markers_after && comp.repeated_markers_after.length > 0 ? (
-                              <div className="flex flex-wrap gap-2">
-                                {comp.repeated_markers_after.map((m: string) => (
-                                  <span key={m} className="px-2 py-1 bg-amber-100 text-amber-800 text-xs font-medium rounded-md border border-amber-200">
-                                    {m}
-                                  </span>
-                                ))}
-                              </div>
-                            ) : (
-                              <p className="text-sm text-slate-400 italic">None detected.</p>
-                            )}
-                          </div>
-                        </div>
-                        <div className="space-y-4">
-                          <div>
-                            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Repeated Files Modified</p>
-                            {comp.repeated_files_after && comp.repeated_files_after.length > 0 ? (
-                              <ul className="text-xs space-y-1 bg-white p-2 rounded-lg border border-slate-100 shadow-sm max-h-[120px] overflow-y-auto">
-                                {comp.repeated_files_after.map((f: string) => (
-                                  <li key={f} className="font-mono text-slate-700 truncate" title={f}>{f}</li>
-                                ))}
-                              </ul>
-                            ) : (
-                              <p className="text-sm text-slate-400 italic">None detected.</p>
-                            )}
-                          </div>
-                          {comp.recreated_files_after && comp.recreated_files_after.length > 0 && (
-                            <div>
-                              <p className="text-xs font-semibold text-rose-500 uppercase tracking-wider mb-2">Deleted Then Recreated</p>
-                              <ul className="text-xs space-y-1 bg-rose-50 p-2 rounded-lg border border-rose-100 shadow-sm">
-                                {comp.recreated_files_after.map((f: string) => (
-                                  <li key={f} className="font-mono text-rose-700 truncate" title={f}>{f}</li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Suspicious Patterns */}
-            {metrics.suspicious_patterns && metrics.suspicious_patterns.length > 0 && (
-              <div className="space-y-4 pt-6 border-t border-slate-200">
-                <div className="flex items-center justify-between px-1">
-                  <h2 className="text-xl font-semibold text-slate-800 tracking-tight flex items-center gap-2">
-                    <ShieldAlert className="w-5 h-5 text-rose-500" />
-                    Suspicious Patterns & Loop Detection
-                  </h2>
-                  <span className="text-sm font-medium text-slate-500">{metrics.suspicious_patterns.length} patterns detected</span>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {metrics.suspicious_patterns.map((pattern: any, idx: number) => {
-                    let bgColor = "bg-slate-50/50";
-                    let ringColor = "ring-slate-200";
-                    let badgeColor = "bg-slate-100 text-slate-600 border-slate-200";
-                    
-                    if (pattern.severity === "High") {
-                      bgColor = "bg-rose-50/30";
-                      ringColor = "ring-rose-200";
-                      badgeColor = "bg-rose-100 text-rose-700 border-rose-200";
-                    } else if (pattern.severity === "Medium") {
-                      bgColor = "bg-amber-50/30";
-                      ringColor = "ring-amber-200";
-                      badgeColor = "bg-amber-100 text-amber-700 border-amber-200";
-                    } else if (pattern.severity === "Low") {
-                      bgColor = "bg-blue-50/30";
-                      ringColor = "ring-blue-200";
-                      badgeColor = "bg-blue-100 text-blue-700 border-blue-200";
-                    }
-
-                    return (
-                      <Card key={idx} className={`border-0 shadow-sm ring-1 ${ringColor} ${bgColor} overflow-hidden`}>
-                        <CardHeader className="py-4 border-b border-white/50">
-                          <div className="flex justify-between items-start gap-2">
-                            <CardTitle className="text-base text-slate-800 font-semibold leading-tight">
-                              {pattern.title}
-                            </CardTitle>
-                            <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${badgeColor}`}>
-                              {pattern.severity}
-                            </span>
-                          </div>
-                        </CardHeader>
-                        <CardContent className="p-4 space-y-4">
-                          <div>
-                            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Evidence</p>
-                            <p className="text-sm text-slate-700 bg-white/60 p-2 rounded-lg border border-slate-100/50">
-                              {pattern.evidence}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Related Items</p>
-                            <div className="flex flex-wrap gap-2">
-                              {pattern.related_files_events.map((rel: string, i: number) => (
-                                <span key={i} className="px-2 py-1 bg-white/60 text-slate-600 text-[11px] font-mono rounded-md border border-slate-200/60 max-w-full truncate" title={rel}>
-                                  {rel.split('/').pop() || rel}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                          <div>
-                            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Why it matters</p>
-                            <p className="text-sm text-slate-600 leading-snug">
-                              {pattern.why_it_matters}
-                            </p>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-            
-            {/* Recommendations */}
-            {metrics.recommendations && metrics.recommendations.length > 0 && (
-              <div className="space-y-4 pt-6 border-t border-slate-200">
-                <div className="flex items-center justify-between px-1">
-                  <h2 className="text-xl font-semibold text-slate-800 tracking-tight flex items-center gap-2">
-                    <Lightbulb className="w-5 h-5 text-amber-500" />
-                    Agent Workflow Recommendations
-                  </h2>
-                  <span className="text-sm font-medium text-slate-500">{metrics.recommendations.length} recommendations</span>
-                </div>
-                
-                <div className="grid grid-cols-1 gap-4">
-                  {metrics.recommendations.map((rec: any, idx: number) => (
-                    <Card key={idx} className="border-0 shadow-sm ring-1 ring-amber-200 bg-amber-50/30 overflow-hidden">
-                      <CardHeader className="py-4 border-b border-amber-100/50 bg-amber-100/20">
-                        <CardTitle className="text-base text-amber-900 font-semibold leading-tight">
-                          {rec.issue}
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="p-4 space-y-4">
-                        <div>
-                          <p className="text-xs font-semibold text-amber-700/70 uppercase tracking-wider mb-1">Evidence</p>
-                          <p className="text-sm text-amber-900 leading-snug">
-                            {rec.evidence}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-xs font-semibold text-amber-700/70 uppercase tracking-wider mb-1">Recommendation</p>
-                          <p className="text-sm font-medium text-amber-900 leading-snug bg-white/60 p-3 rounded-lg border border-amber-200/50">
-                            {rec.recommendation}
-                          </p>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              </div>
-            )}
-            
-          </div>
-
-          {/* Timeline Sidebar */}
-          <div className="xl:col-span-1">
-            <Card className="border-0 shadow-sm ring-1 ring-slate-200/50 bg-white sticky top-6">
-              <CardHeader className="border-b border-slate-100 bg-slate-50/50 pb-4">
-                <CardTitle className="text-lg flex items-center gap-2 text-slate-800">
-                  <ListTree className="w-5 h-5 text-slate-500" /> Event Stream
-                </CardTitle>
-                <CardDescription>Real-time operational logs</CardDescription>
-                {status === "recording" && (
-                  <form onSubmit={handleAddNote} className="mt-4 flex gap-2">
-                    <Input 
-                      placeholder="Add a prompt note..." 
-                      value={newNote}
-                      onChange={(e) => setNewNote(e.target.value)}
-                      className="h-8 text-sm"
-                    />
-                    <Button type="submit" disabled={isAddingNote || !newNote.trim()} size="sm" className="h-8 bg-blue-600 hover:bg-blue-700">
-                      Add
-                    </Button>
-                  </form>
-                )}
-              </CardHeader>
-              <CardContent className="p-0">
-                <div className="max-h-[800px] overflow-y-auto p-6 space-y-5 custom-scrollbar">
-                  {metrics.timeline && metrics.timeline.map((event: any, index: number) => {
-                    // Determine event color
-                    let dotColor = "bg-slate-300";
-                    if (event.type === "file_created") dotColor = "bg-emerald-500";
-                    else if (event.type === "file_deleted") dotColor = "bg-rose-500";
-                    else if (event.type === "file_modified") dotColor = "bg-blue-500";
-                    else if (event.type === "codex_log_marker") dotColor = "bg-amber-500";
-                    else if (event.type.includes("started") || event.type.includes("stopped")) dotColor = "bg-violet-500";
-
-                    return (
-                      <div key={index} className="flex gap-4 group">
-                        <div className="flex flex-col items-center">
-                          <div className={`w-2.5 h-2.5 rounded-full ${dotColor} mt-1.5 ring-4 ring-white group-hover:scale-125 transition-transform z-10`} />
-                          {index !== metrics.timeline.length - 1 && <div className="w-[2px] h-full bg-slate-100 my-1 -z-0" />}
-                        </div>
-                        <div className="pb-1 w-full">
-                          <div className="flex justify-between items-start mb-0.5">
-                            <p className="font-semibold text-sm text-slate-700">{event.type}</p>
-                            <p className="text-slate-400 text-[11px] font-mono whitespace-nowrap ml-2">
-                              {new Date(event.time).toLocaleTimeString([], { hour12: false, hour: '2-digit', minute:'2-digit', second:'2-digit' })}
-                            </p>
-                          </div>
-                          <p className="text-slate-500 text-sm break-words leading-snug">
-                            {event.detail}
-                          </p>
-                        </div>
-                      </div>
-                    )
-                  })}
-                  {(!metrics.timeline || metrics.timeline.length === 0) && (
-                    <div className="flex flex-col items-center justify-center py-10 text-slate-400">
-                      <Clock className="w-8 h-8 mb-2 opacity-50" />
-                      <p className="text-sm">Listening for events...</p>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+        <div className="flex items-center gap-3">
+          {status === "recording" && (
+            <Button onClick={handleStop} variant="destructive" className="shadow-lg shadow-rose-500/20">
+              <Square className="w-4 h-4 mr-2" fill="currentColor" /> Stop Recording
+            </Button>
+          )}
+          {status === "stopped" && !reportGenerated && (
+            <Button onClick={() => setShowReview(true)} variant="secondary" className="shadow-lg">
+              Review Session
+            </Button>
+          )}
+          {status === "stopped" && reportGenerated && (
+            <Button onClick={handleExport} className="bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/20">
+              <Download className="w-4 h-4 mr-2" /> Export Audit Bundle
+            </Button>
+          )}
         </div>
       </div>
 
-      {/* Review Modal */}
-      <Dialog open={showReview} onOpenChange={setShowReview}>
-        <DialogContent className="sm:max-w-[500px] border-0 shadow-2xl rounded-2xl overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-blue-500 to-emerald-500" />
-          <DialogHeader className="pt-4">
-            <DialogTitle className="text-2xl font-bold text-slate-800">Audit Session Review</DialogTitle>
-            <DialogDescription className="text-base text-slate-500 mt-2">
-              Log qualitative feedback on the agent's performance. Why did it waste tokens or rewrite files?
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-6 py-6">
-            <div className="space-y-3">
-              <div className="flex justify-between">
-                <Label htmlFor="quality" className="text-sm font-semibold text-slate-700">Code Quality Score</Label>
-                <span className="text-sm font-bold text-blue-600">{review.quality_score} / 10</span>
-              </div>
-              <input 
-                id="quality" 
-                type="range" 
-                min="1" max="10" 
-                value={review.quality_score}
-                onChange={(e) => setReview({...review, quality_score: parseInt(e.target.value)})}
-                className="w-full accent-blue-600 cursor-pointer" 
-              />
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Followed Instructions</Label>
-                <select 
-                  className="w-full p-2 border border-slate-200 rounded-lg text-sm bg-white"
-                  value={review.followed_instruction}
-                  onChange={(e) => setReview({...review, followed_instruction: e.target.value})}
-                >
-                  <option value="unknown">Unknown</option>
-                  <option value="yes">Yes</option>
-                  <option value="no">No</option>
-                </select>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Code Worked</Label>
-                <select 
-                  className="w-full p-2 border border-slate-200 rounded-lg text-sm bg-white"
-                  value={review.code_worked}
-                  onChange={(e) => setReview({...review, code_worked: e.target.value})}
-                >
-                  <option value="unknown">Unknown</option>
-                  <option value="yes">Yes</option>
-                  <option value="no">No</option>
-                </select>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Seemed Confused</Label>
-                <select 
-                  className="w-full p-2 border border-slate-200 rounded-lg text-sm bg-white"
-                  value={review.seemed_confused}
-                  onChange={(e) => setReview({...review, seemed_confused: e.target.value})}
-                >
-                  <option value="unknown">Unknown</option>
-                  <option value="yes">Yes</option>
-                  <option value="no">No</option>
-                </select>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Overused Tools</Label>
-                <select 
-                  className="w-full p-2 border border-slate-200 rounded-lg text-sm bg-white"
-                  value={review.overused_tools}
-                  onChange={(e) => setReview({...review, overused_tools: e.target.value})}
-                >
-                  <option value="unknown">Unknown</option>
-                  <option value="yes">Yes</option>
-                  <option value="no">No</option>
-                </select>
-              </div>
-            </div>
+      <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
+        
+        {/* Main Content Area */}
+        <div className="xl:col-span-3 space-y-8">
+          
+          {/* Top Level Metrics */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <MetricWidget 
+              title="Duration" 
+              value={`${Math.floor(metrics.duration / 60)}m ${metrics.duration % 60}s`} 
+              icon={<Clock />} 
+              delay={0.1} 
+            />
+            <MetricWidget 
+              title="Files Touched" 
+              value={metrics.files_touched} 
+              icon={<Files />} 
+              delay={0.2} 
+            />
+            <MetricWidget 
+              title="Write Amplification" 
+              value={`${metrics.write_amplification.toFixed(1)}x`} 
+              icon={<RefreshCw />} 
+              description="Lines written vs final file size"
+              delay={0.3} 
+              trend={metrics.write_amplification > 2 ? "up" : "neutral"}
+            />
+            <MetricWidget 
+              title="Net Code" 
+              value={`+${metrics.total_lines_written} / -${metrics.total_lines_deleted}`} 
+              icon={<FileCode2 />} 
+              delay={0.4} 
+            />
+          </div>
 
-            <div className="space-y-3">
-              <Label htmlFor="notes" className="text-sm font-semibold text-slate-700">Audit Notes</Label>
-              <Textarea 
-                id="notes" 
-                placeholder="e.g. Agent got stuck in a loop trying to parse the JSON file, rewrote the parser 4 times..." 
-                value={review.notes}
-                onChange={(e) => setReview({...review, notes: e.target.value})}
-                className="resize-none h-32 focus-visible:ring-blue-500 rounded-xl" 
-              />
+          {/* Top Churned Files */}
+          <div className="glass-card rounded-xl border border-border/40 overflow-hidden mt-8">
+            <div className="p-5 border-b border-border/30 bg-white/5">
+              <h3 className="font-semibold text-lg flex items-center gap-2">
+                <Activity className="w-5 h-5 text-primary" /> Top Churned Files
+              </h3>
+            </div>
+            <div className="p-0">
+              <table className="w-full text-sm text-left">
+                <thead className="text-xs uppercase bg-black/20 text-muted-foreground">
+                  <tr>
+                    <th className="px-6 py-4 font-semibold tracking-wider">File Path</th>
+                    <th className="px-6 py-4 font-semibold tracking-wider text-center">Rewrites</th>
+                    <th className="px-6 py-4 font-semibold tracking-wider text-right">Written</th>
+                    <th className="px-6 py-4 font-semibold tracking-wider text-right">WA</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {metrics.top_churned_files?.map((f: any, i: number) => (
+                    <tr key={i} className="border-b border-border/10 hover:bg-white/5 transition-colors">
+                      <td className="px-6 py-4 font-mono text-muted-foreground truncate max-w-[300px]" title={f.path}>{f.path}</td>
+                      <td className="px-6 py-4 text-center">
+                        <span className="bg-primary/20 text-primary-foreground px-2 py-1 rounded text-xs font-bold">{f.rewritten}</span>
+                      </td>
+                      <td className="px-6 py-4 text-emerald-500 font-medium text-right">+{f.written}</td>
+                      <td className={`px-6 py-4 font-bold text-right ${f.wa > 2 ? "text-amber-500" : "text-muted-foreground"}`}>
+                        {f.wa}x
+                      </td>
+                    </tr>
+                  ))}
+                  {!metrics.top_churned_files?.length && (
+                    <tr>
+                      <td colSpan={4} className="px-6 py-10 text-center text-muted-foreground italic">No file churn recorded yet.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
-          <DialogFooter className="sm:justify-between border-t border-slate-100 pt-4">
-            <Button variant="ghost" onClick={() => setShowReview(false)} className="text-slate-500">Cancel</Button>
-            <Button onClick={handleSaveReview} className="bg-slate-900 hover:bg-slate-800 text-white rounded-full px-6">Save Audit & Generate Report</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      
-      {/* Custom styles for scrollbar in timeline */}
-      <style dangerouslySetInnerHTML={{__html: `
-        .custom-scrollbar::-webkit-scrollbar {
-          width: 6px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background-color: #e2e8f0;
-          border-radius: 20px;
-        }
-      `}} />
+
+          <AnalysisSection metrics={metrics} />
+          
+        </div>
+
+        {/* Sidebar / Timeline Area */}
+        <div className="xl:col-span-1">
+          <TimelinePanel 
+            timeline={metrics.timeline} 
+            status={status} 
+            onAddNote={handleAddNote} 
+            isAddingNote={isAddingNote} 
+          />
+        </div>
+      </div>
+
+      <ReviewModal 
+        show={showReview} 
+        setShow={setShowReview} 
+        review={review} 
+        setReview={setReview} 
+        onSave={handleSaveReview} 
+      />
     </div>
   );
 }
 
 export default function Dashboard() {
   return (
-    <Suspense fallback={
-      <div className="flex h-screen w-full items-center justify-center bg-slate-50">
-        <Activity className="h-8 w-8 text-blue-500 animate-spin" />
-      </div>
-    }>
+    <Suspense fallback={<div className="flex h-[80vh] items-center justify-center">Loading...</div>}>
       <DashboardContent />
     </Suspense>
   );
