@@ -33,6 +33,16 @@ export async function addReview(sessionId: string, review: any) {
   return res.json();
 }
 
+export async function addPromptNote(sessionId: string, text: string) {
+  const res = await fetch(`${API_BASE}/sessions/${sessionId}/notes`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text })
+  });
+  if (!res.ok) throw new Error("Failed to add prompt note");
+  return res.json();
+}
+
 export async function generateReport(sessionId: string) {
   const res = await fetch(`${API_BASE}/sessions/${sessionId}/report`, {
     method: "POST",

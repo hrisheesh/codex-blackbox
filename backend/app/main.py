@@ -169,6 +169,7 @@ async def stop_session(session_id: str):
 @app.post("/api/sessions/{session_id}/notes")
 async def add_prompt_note(session_id: str, req: PromptNoteRequest):
     session_manager.add_prompt_note(session_id, req.text)
+    await broadcast_metrics(session_id)
     return {"status": "ok"}
 
 @app.post("/api/sessions/{session_id}/review")

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { getLiveMetrics, stopSession, addReview, generateReport } from "@/lib/api";
+import { getLiveMetrics, stopSession, addReview, generateReport, addPromptNote } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
@@ -29,6 +29,8 @@ function DashboardContent() {
     notes: "" 
   });
   const [reportGenerated, setReportGenerated] = useState(false);
+  const [newNote, setNewNote] = useState("");
+  const [isAddingNote, setIsAddingNote] = useState(false);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -67,6 +69,20 @@ function DashboardContent() {
     await generateReport(sessionId);
     setShowReview(false);
     setReportGenerated(true);
+  };
+
+  const handleAddNote = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!sessionId || !newNote.trim()) return;
+    setIsAddingNote(true);
+    try {
+      await addPromptNote(sessionId, newNote);
+      setNewNote("");
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsAddingNote(false);
+    }
   };
 
   if (!sessionId) return <div className="flex h-screen items-center justify-center font-mono text-slate-500">No session ID provided.</div>;
@@ -330,6 +346,19 @@ function DashboardContent() {
                   <ListTree className="w-5 h-5 text-slate-500" /> Event Stream
                 </CardTitle>
                 <CardDescription>Real-time operational logs</CardDescription>
+                {status === "recording" && (
+                  <form onSubmit={handleAddNote} className="mt-4 flex gap-2">
+                    <Input 
+                      placeholder="Add a prompt note..." 
+                      value={newNote}
+                      onChange={(e) => setNewNote(e.target.value)}
+                      className="h-8 text-sm"
+                    />
+                    <Button type="submit" disabled={isAddingNote || !newNote.trim()} size="sm" className="h-8 bg-blue-600 hover:bg-blue-700">
+                      Add
+                    </Button>
+                  </form>
+                )}
               </CardHeader>
               <CardContent className="p-0">
                 <div className="max-h-[800px] overflow-y-auto p-6 space-y-5 custom-scrollbar">
