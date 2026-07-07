@@ -1,81 +1,70 @@
-import { motion } from "framer-motion";
-import { ShieldAlert, Lightbulb, AlertTriangle } from "lucide-react";
+import { AlertCircle, Zap, ShieldAlert, ShieldCheck } from "lucide-react";
 
-export function AnalysisSection({ metrics }: { metrics: any }) {
-  if (!metrics) return null;
+export function AnalysisSection({ metrics }: any) {
+  const hasPatterns = metrics.suspicious_patterns && metrics.suspicious_patterns.length > 0;
+  const hasRecommendations = metrics.recommendations && metrics.recommendations.length > 0;
 
-  const hasPatterns = metrics.suspicious_patterns?.length > 0;
-  const hasRecs = metrics.recommendations?.length > 0;
-
-  if (!hasPatterns && !hasRecs) return null;
+  if (!hasPatterns && !hasRecommendations) {
+    return (
+      <div className="card-base text-center py-16 bg-surface-soft/50 border-dashed">
+        <ShieldCheck className="w-8 h-8 text-[#32d74b] mx-auto mb-4 opacity-80" />
+        <h4 className="card-title text-ink mb-1">No Anomalies Detected</h4>
+        <p className="body-sm text-steel">Session appears clean and efficient.</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-8 mt-10 border-t border-border/30 pt-8">
-      
-      {/* Recommendations */}
-      {hasRecs && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}>
-          <h2 className="text-xl font-semibold flex items-center gap-2 mb-4 text-amber-500">
-            <Lightbulb className="w-5 h-5" /> Agent Workflow Recommendations
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {metrics.recommendations.map((rec: any, i: number) => (
-              <div key={i} className="glass-card rounded-xl p-5 border-l-4 border-l-amber-500 relative overflow-hidden group">
-                <div className="absolute inset-0 bg-amber-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                <h3 className="font-bold text-amber-500 mb-2">{rec.issue}</h3>
-                <div className="space-y-2 text-sm">
-                  <p><span className="font-semibold text-muted-foreground uppercase text-xs tracking-wider">Evidence:</span> <br/>{rec.evidence}</p>
-                  <p className="bg-amber-500/10 p-3 rounded-lg border border-amber-500/20 text-amber-100">
-                    <span className="font-semibold uppercase text-xs tracking-wider block mb-1">Recommendation:</span>
-                    {rec.recommendation}
-                  </p>
+    <div className="space-y-6">
+      {hasPatterns && (
+        <div className="card-base bg-danger-bg border-danger-text/20">
+          <div className="flex items-center gap-2 mb-4 text-danger-text">
+            <ShieldAlert className="w-4 h-4" />
+            <h4 className="caption-bold uppercase tracking-widest">Suspicious Patterns ({metrics.suspicious_patterns.length})</h4>
+          </div>
+          <div className="space-y-4">
+            {metrics.suspicious_patterns.map((p: any, i: number) => (
+              <div key={i} className="bg-canvas/50 rounded-xl p-4 border border-danger-text/10">
+                <h5 className="body-md font-semibold text-ink mb-1 flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-danger-text"></span>
+                  {p.title}
+                </h5>
+                <p className="caption text-steel mb-3">{p.evidence}</p>
+                
+                <div className="bg-danger-bg/50 px-3 py-2 rounded-lg border border-danger-text/10">
+                  <p className="caption-bold text-danger-text mb-1">Why it matters:</p>
+                  <p className="caption text-ink leading-relaxed">{p.why_it_matters}</p>
                 </div>
               </div>
             ))}
           </div>
-        </motion.div>
+        </div>
       )}
 
-      {/* Suspicious Patterns */}
-      {hasPatterns && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }}>
-          <h2 className="text-xl font-semibold flex items-center gap-2 mb-4 text-rose-500">
-            <ShieldAlert className="w-5 h-5" /> Suspicious Patterns
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {metrics.suspicious_patterns.map((pattern: any, i: number) => {
-              const isHigh = pattern.severity === "High";
-              const isMedium = pattern.severity === "Medium";
-              const borderColor = isHigh ? "border-l-rose-500" : isMedium ? "border-l-amber-500" : "border-l-blue-500";
-              const titleColor = isHigh ? "text-rose-500" : isMedium ? "text-amber-500" : "text-blue-500";
-              const badgeBg = isHigh ? "bg-rose-500/20 text-rose-300" : isMedium ? "bg-amber-500/20 text-amber-300" : "bg-blue-500/20 text-blue-300";
-
-              return (
-                <div key={i} className={`glass-card rounded-xl p-5 border-l-4 ${borderColor}`}>
-                  <div className="flex justify-between items-start mb-3">
-                    <h3 className={`font-bold ${titleColor}`}>{pattern.title}</h3>
-                    <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-md ${badgeBg}`}>
-                      {pattern.severity}
-                    </span>
+      {hasRecommendations && (
+        <div className="card-base bg-info-bg border-info-text/20">
+          <div className="flex items-center gap-2 mb-4 text-info-text">
+            <Zap className="w-4 h-4" />
+            <h4 className="caption-bold uppercase tracking-widest">Recommendations ({metrics.recommendations.length})</h4>
+          </div>
+          <div className="space-y-4">
+            {metrics.recommendations.map((r: any, i: number) => (
+              <div key={i} className="bg-canvas/50 rounded-xl p-4 border border-info-text/10">
+                <h5 className="body-md font-semibold text-ink mb-2">{r.issue}</h5>
+                <div className="flex gap-4">
+                  <div className="flex-1">
+                    <p className="micro text-steel uppercase tracking-widest mb-1">Evidence</p>
+                    <p className="caption text-ink bg-info-bg/30 px-2 py-1.5 rounded border border-info-text/10">{r.evidence}</p>
                   </div>
-                  <div className="space-y-3 text-sm">
-                    <p className="bg-black/20 p-2 rounded border border-white/5">{pattern.evidence}</p>
-                    {pattern.related_files_events?.length > 0 && (
-                      <div className="flex flex-wrap gap-2">
-                        {pattern.related_files_events.map((rel: string, idx: number) => (
-                          <span key={idx} className="px-2 py-1 bg-white/5 rounded text-xs font-mono text-muted-foreground truncate max-w-full">
-                            {rel.split('/').pop() || rel}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    <p className="text-muted-foreground">{pattern.why_it_matters}</p>
+                  <div className="flex-1">
+                    <p className="micro text-steel uppercase tracking-widest mb-1">Action</p>
+                    <p className="caption font-medium text-info-text bg-info-bg px-2 py-1.5 rounded border border-info-text/20">{r.recommendation}</p>
                   </div>
                 </div>
-              );
-            })}
+              </div>
+            ))}
           </div>
-        </motion.div>
+        </div>
       )}
     </div>
   );

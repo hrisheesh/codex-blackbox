@@ -1,23 +1,17 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
+import { Header } from "@/components/layout/Header";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
 });
 
 export const metadata: Metadata = {
   title: "Codex Blackbox",
-  description: "Local AI Agent Observability",
+  description: "Agent Observability, Redefined.",
 };
-
-import { Header } from "@/components/layout/Header";
 
 export default function RootLayout({
   children,
@@ -25,13 +19,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased dark`}
-    >
-      <body className="min-h-full flex flex-col bg-background text-foreground">
+    <html lang="en" className={`${inter.variable} h-screen w-screen overflow-hidden antialiased dark`}>
+      <body className="flex flex-col h-full w-full bg-[#000000] text-[#f5f5f7] selection:bg-white/20">
         <Header />
-        <main className="flex-1">
+        <main className="flex-1 overflow-hidden">
           {children}
         </main>
       </body>

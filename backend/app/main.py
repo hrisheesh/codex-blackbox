@@ -19,6 +19,7 @@ from .db import get_session_local, SESSIONS_DIR
 from .models import Session, FileEvent, FileChurn, PromptNote
 from .report_generator import generate_reports
 from .analytics import generate_compaction_analytics, detect_suspicious_patterns, generate_recommendations
+from . import session_manager
 
 app = FastAPI(title="codex-blackbox API")
 

@@ -60,14 +60,6 @@ export async function exportSession(sessionId: string) {
   window.URL.revokeObjectURL(url);
 }
 
-export async function generateReport(sessionId: string) {
-  const res = await fetch(`${API_BASE}/sessions/${sessionId}/report`, {
-    method: "POST",
-  });
-  if (!res.ok) throw new Error("Failed to generate report");
-  return res.json();
-}
-
 export async function getLiveMetrics(sessionId: string) {
   const res = await fetch(`${API_BASE}/sessions/${sessionId}`);
   if (res.status === 404) return { error: "not_found" };
@@ -75,29 +67,14 @@ export async function getLiveMetrics(sessionId: string) {
   return res.json();
 }
 
+export async function compareSessions(s1: string, s2: string) {
+  const res = await fetch(`${API_BASE}/compare?s1=${s1}&s2=${s2}`);
+  if (!res.ok) throw new Error("Failed to compare sessions");
+  return res.json();
+}
+
 export async function listSessions() {
   const res = await fetch(`${API_BASE}/sessions`);
   if (!res.ok) return [];
   return res.json();
-}
-
-export async function compareSessions(s1: string, s2: string) {
-  const res = await fetch(`${API_BASE}/compare?s1=${s1}&s2=${s2}`);
-  if (!res.ok) throw new Error("Failed to fetch comparison");
-  return res.json();
-}
-
-export async function exportComparison(s1: string, s2: string) {
-  const res = await fetch(`${API_BASE}/compare/export?s1=${s1}&s2=${s2}`);
-  if (!res.ok) throw new Error("Failed to export comparison");
-  
-  const blob = await res.blob();
-  const url = window.URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `comparison_${s1}_${s2}.md`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  window.URL.revokeObjectURL(url);
 }

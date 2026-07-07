@@ -1,87 +1,57 @@
-import { motion, AnimatePresence } from "framer-motion";
-import { Clock, Plus } from "lucide-react";
-import { useState } from "react";
+import { Clock, Play, FileText, CheckCircle2 } from "lucide-react";
 
-export function TimelinePanel({ timeline, status, onAddNote, isAddingNote }: any) {
-  const [note, setNote] = useState("");
+export function TimelinePanel({ events }: any) {
+  if (!events || events.length === 0) {
+    return (
+      <div className="card-base text-center py-16 bg-surface-soft/50 border-dashed">
+        <Clock className="w-8 h-8 text-surface-hover mx-auto mb-4" />
+        <p className="body-md text-steel">No events recorded yet.</p>
+        <p className="caption text-stone mt-1">Waiting for agent activity...</p>
+      </div>
+    );
+  }
 
-  const handleSubmit = (e: any) => {
-    e.preventDefault();
-    if (note.trim()) {
-      onAddNote(note);
-      setNote("");
+  const getTypeStyle = (type: string) => {
+    switch(type) {
+      case 'start': return 'bg-surface border-white/20 text-white';
+      case 'file_created': return 'bg-[#32d74b]/10 border-[#32d74b]/20 text-[#32d74b]';
+      case 'file_modified': return 'bg-[#0a84ff]/10 border-[#0a84ff]/20 text-[#0a84ff]';
+      case 'file_deleted': return 'bg-[#ff453a]/10 border-[#ff453a]/20 text-[#ff453a]';
+      case 'compaction': return 'bg-[#ff9f0a]/10 border-[#ff9f0a]/20 text-[#ff9f0a]';
+      case 'stop': return 'bg-white text-black border-white';
+      default: return 'bg-surface border-hairline text-steel';
     }
   };
 
-  return (
-    <div className="glass-card rounded-xl border border-border/40 sticky top-20 flex flex-col max-h-[85vh]">
-      <div className="p-4 border-b border-border/30 bg-white/5 backdrop-blur-md rounded-t-xl">
-        <h3 className="font-semibold text-lg flex items-center gap-2">
-          <Clock className="w-5 h-5 text-primary" />
-          Live Timeline
-        </h3>
-        {status === "recording" && (
-          <form onSubmit={handleSubmit} className="mt-4 flex gap-2">
-            <input
-              type="text"
-              placeholder="Add a prompt note..."
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              className="flex-1 h-9 rounded-md border border-border/50 bg-background/50 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-            />
-            <button
-              type="submit"
-              disabled={isAddingNote || !note.trim()}
-              className="h-9 px-3 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
-            >
-              <Plus className="w-4 h-4" />
-            </button>
-          </form>
-        )}
-      </div>
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
-        <AnimatePresence>
-          {timeline?.map((event: any, i: number) => {
-            let dotColor = "bg-muted";
-            if (event.type === "file_created") dotColor = "bg-chart-2";
-            else if (event.type === "file_deleted") dotColor = "bg-destructive";
-            else if (event.type === "file_modified") dotColor = "bg-chart-1";
-            else if (event.type === "codex_log_marker") dotColor = "bg-chart-3";
-            else if (event.type.includes("started") || event.type.includes("stopped")) dotColor = "bg-chart-4";
-            else if (event.type === "prompt_note") dotColor = "bg-chart-5";
+  const getIcon = (type: string) => {
+    if (type === 'start' || type === 'stop') return <Play className="w-3.5 h-3.5" />;
+    if (type === 'compaction') return <CheckCircle2 className="w-3.5 h-3.5" />;
+    return <FileText className="w-3.5 h-3.5" />;
+  };
 
-            return (
-              <motion.div
-                key={event.time + i}
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                className="flex gap-4 relative"
-              >
-                <div className="flex flex-col items-center">
-                  <div className={`w-3 h-3 rounded-full ${dotColor} mt-1.5 shadow-[0_0_10px_rgba(255,255,255,0.2)] z-10`} />
-                  {i !== timeline.length - 1 && <div className="w-[1px] h-full bg-border mt-2" />}
+  return (
+    <div className="relative pl-6">
+      <div className="absolute left-[11px] top-4 bottom-4 w-[1px] bg-hairline-soft" />
+      <div className="space-y-6">
+        {events.map((ev: any, idx: number) => {
+          const style = getTypeStyle(ev.type);
+          return (
+            <div key={idx} className="relative flex gap-4 items-start group">
+              <div className={`relative z-10 w-6 h-6 rounded-full border flex items-center justify-center shrink-0 bg-canvas transition-colors ${style} group-hover:scale-110 duration-300`}>
+                {getIcon(ev.type)}
+              </div>
+              <div className="flex-1 pt-0.5 min-w-0">
+                <div className="flex items-baseline justify-between gap-4">
+                  <p className="caption-bold text-ink truncate">{ev.detail}</p>
+                  <span className="micro text-steel shrink-0 bg-surface-soft px-1.5 rounded border border-hairline-soft">
+                    {new Date(ev.time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'})}
+                  </span>
                 </div>
-                <div className="pb-4 flex-1">
-                  <div className="flex justify-between items-start mb-1">
-                    <span className="font-semibold text-sm capitalize">{event.type.replace(/_/g, " ")}</span>
-                    <span className="text-[10px] text-muted-foreground font-mono">
-                      {new Date(event.time).toLocaleTimeString()}
-                    </span>
-                  </div>
-                  <p className="text-sm text-muted-foreground/80 leading-snug break-words">
-                    {event.detail}
-                  </p>
-                </div>
-              </motion.div>
-            );
-          })}
-        </AnimatePresence>
-        {!timeline?.length && (
-          <div className="flex flex-col items-center justify-center py-10 opacity-50">
-            <Clock className="w-8 h-8 mb-2" />
-            <p className="text-sm">Listening for events...</p>
-          </div>
-        )}
+                <p className="caption text-steel mt-1 uppercase tracking-wider">{ev.type.replace('_', ' ')}</p>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
