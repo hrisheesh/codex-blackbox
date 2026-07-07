@@ -24,6 +24,30 @@ def generate_reports(session_id: str):
         current_lines = sum(c.current_lines for c in file_churns)
         overall_wa = total_written / max(current_lines, 1) if current_lines > 0 else 0
         
+        # Git diff metrics
+        git_added = 0
+        git_deleted = 0
+        git_available = False
+        diffs_dir = os.path.join(session_dir, "diffs")
+        final_numstat_path = os.path.join(diffs_dir, "final_numstat.txt")
+        if os.path.exists(final_numstat_path):
+            git_available = True
+            with open(final_numstat_path, "r") as f:
+                for line in f:
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        try:
+                            git_added += int(parts[0])
+                            git_deleted += int(parts[1])
+                        except ValueError:
+                            pass
+                            
+        # Top churned files
+        top_churned = sorted(file_churns, key=lambda c: c.total_lines_written, reverse=True)[:10]
+        
+        # Timeline events
+        file_events = db.query(FileEvent).filter(FileEvent.session_id == session_id).order_by(FileEvent.time).all()
+        
         # Prepare data for templates
         data = {
             "session_id": session_id,
@@ -35,7 +59,17 @@ def generate_reports(session_id: str):
             "total_lines_written": total_written,
             "total_lines_deleted": total_deleted,
             "write_amplification": f"{overall_wa:.2f}x",
-            "quality_score": review.quality_score if review else "N/A",
+            "git_available": git_available,
+            "git_added": git_added,
+            "git_deleted": git_deleted,
+            "review": {
+                "quality_score": review.quality_score if review else "N/A",
+                "followed_instruction": review.followed_instruction if review else "unknown",
+                "code_worked": review.code_worked if review else "unknown",
+                "seemed_confused": review.seemed_confused if review else "unknown",
+                "overused_tools": review.overused_tools if review else "unknown",
+                "notes": review.notes if review else "N/A"
+            },
             "churn_details": [
                 {
                     "path": c.path,
@@ -46,7 +80,23 @@ def generate_reports(session_id: str):
                     "wa": f"{c.write_amplification:.2f}x"
                 } for c in file_churns
             ],
-            "notes": [n.text for n in notes]
+            "top_churned": [
+                {
+                    "path": c.path,
+                    "written": c.total_lines_written,
+                    "wa": f"{c.write_amplification:.2f}x"
+                } for c in top_churned
+            ],
+            "timeline": [
+                {
+                    "time": e.time.strftime("%H:%M:%S"),
+                    "type": e.type,
+                    "path": e.path,
+                    "delta": f"+{e.delta_added} -{e.delta_deleted}" if e.type == "file_modified" else ""
+                } for e in file_events
+            ],
+            "notes": [n.text for n in notes],
+            "analysis_prompt": "Analyze this codex-blackbox audit bundle. Identify where the coding agent wasted context or tool calls, whether compaction may have caused repeated work or lower quality, and recommend concrete changes to config, global AGENTS.md, project AGENTS.md, and prompting workflow. Be specific and evidence-based."
         }
         
         # Generate Markdown
@@ -62,11 +112,29 @@ File events: {{ file_events }}
 Total lines written: +{{ total_lines_written }}
 Total lines deleted: -{{ total_lines_deleted }}
 Write amplification: {{ write_amplification }}
-User quality score: {{ quality_score }}/10
+{% if git_available %}
+Final Git Added: +{{ git_added }}
+Final Git Deleted: -{{ git_deleted }}
+{% endif %}
+
+## Quality Review
+- **Quality Score**: {{ review.quality_score }}/10
+- **Followed Instructions**: {{ review.followed_instruction }}
+- **Code Worked**: {{ review.code_worked }}
+- **Seemed Confused**: {{ review.seemed_confused }}
+- **Overused Tools**: {{ review.overused_tools }}
+- **Notes**: {{ review.notes }}
 
 ## Prompt Notes
 {% for note in notes %}
 - {{ note }}
+{% else %}
+None recorded.
+{% endfor %}
+
+## Top Churned Files
+{% for f in top_churned %}
+1. {{ f.path }} (+{{ f.written }}, WA: {{ f.wa }})
 {% endfor %}
 
 ## File Churn Summary
@@ -75,6 +143,16 @@ User quality score: {{ quality_score }}/10
 {% for churn in churn_details %}
 | {{ churn.path }} | +{{ churn.written }} | -{{ churn.deleted }} | {{ churn.recreated }} | {{ churn.rewritten }} | {{ churn.wa }} |
 {% endfor %}
+
+## Timeline
+{% for event in timeline %}
+- `{{ event.time }}` **{{ event.type }}** {{ event.path }} {{ event.delta }}
+{% endfor %}
+
+## LLM Analysis Prompt
+```text
+{{ analysis_prompt }}
+```
 """
         template = Template(md_template)
         md_content = template.render(**data)
@@ -106,8 +184,29 @@ th { background-color: #f2f2f2; }
 <li><b>Total lines written:</b> +{{ total_lines_written }}</li>
 <li><b>Total lines deleted:</b> -{{ total_lines_deleted }}</li>
 <li><b>Write amplification:</b> {{ write_amplification }}</li>
-<li><b>Quality score:</b> {{ quality_score }}/10</li>
+{% if git_available %}
+<li><b>Final Git Added:</b> +{{ git_added }}</li>
+<li><b>Final Git Deleted:</b> -{{ git_deleted }}</li>
+{% endif %}
 </ul>
+
+<h2>Quality Review</h2>
+<ul>
+<li><b>Quality score:</b> {{ review.quality_score }}/10</li>
+<li><b>Followed Instructions:</b> {{ review.followed_instruction }}</li>
+<li><b>Code Worked:</b> {{ review.code_worked }}</li>
+<li><b>Seemed Confused:</b> {{ review.seemed_confused }}</li>
+<li><b>Overused Tools:</b> {{ review.overused_tools }}</li>
+<li><b>Notes:</b> {{ review.notes }}</li>
+</ul>
+
+<h2>Top Churned Files</h2>
+<ol>
+{% for f in top_churned %}
+<li>{{ f.path }} (+{{ f.written }}, WA: {{ f.wa }})</li>
+{% endfor %}
+</ol>
+
 <h2>File Churn Summary</h2>
 <table>
 <tr><th>File Path</th><th>Written</th><th>Deleted</th><th>Recreated</th><th>Rewrites</th><th>WA</th></tr>
@@ -118,6 +217,16 @@ th { background-color: #f2f2f2; }
 </tr>
 {% endfor %}
 </table>
+
+<h2>Timeline</h2>
+<ul>
+{% for event in timeline %}
+<li><code>{{ event.time }}</code> <b>{{ event.type }}</b> {{ event.path }} {{ event.delta }}</li>
+{% endfor %}
+</ul>
+
+<h2>LLM Analysis Prompt</h2>
+<pre><code>{{ analysis_prompt }}</code></pre>
 </body>
 </html>"""
         html_content = Template(html_template).render(**data)
@@ -137,6 +246,9 @@ th { background-color: #f2f2f2; }
                 "total_lines_written": total_written,
                 "total_lines_deleted": total_deleted,
                 "write_amplification": overall_wa,
+                "git_available": git_available,
+                "git_added": git_added,
+                "git_deleted": git_deleted
             },
             "prompt_notes": [n.text for n in notes],
             "file_churn": [

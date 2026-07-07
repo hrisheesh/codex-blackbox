@@ -21,10 +21,10 @@ class PromptNoteRequest(BaseModel):
 
 class ReviewRequest(BaseModel):
     quality_score: Optional[int] = None
-    followed_instruction: Optional[bool] = None
-    code_worked: Optional[bool] = None
-    seemed_confused: Optional[bool] = None
-    overused_tools: Optional[bool] = None
+    followed_instruction: Optional[str] = None
+    code_worked: Optional[str] = None
+    seemed_confused: Optional[str] = None
+    overused_tools: Optional[str] = None
     notes: Optional[str] = None
 
 class GenerateReportResponse(BaseModel):

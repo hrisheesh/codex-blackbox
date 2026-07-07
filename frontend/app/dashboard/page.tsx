@@ -20,7 +20,14 @@ function DashboardContent() {
   const [metrics, setMetrics] = useState<any>(null);
   const [status, setStatus] = useState("loading");
   const [showReview, setShowReview] = useState(false);
-  const [review, setReview] = useState({ quality_score: 5, notes: "" });
+  const [review, setReview] = useState({ 
+    quality_score: 5, 
+    followed_instruction: "unknown",
+    code_worked: "unknown",
+    seemed_confused: "unknown",
+    overused_tools: "unknown",
+    notes: "" 
+  });
   const [reportGenerated, setReportGenerated] = useState(false);
 
   useEffect(() => {
@@ -392,6 +399,58 @@ function DashboardContent() {
                 className="w-full accent-blue-600 cursor-pointer" 
               />
             </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Followed Instructions</Label>
+                <select 
+                  className="w-full p-2 border border-slate-200 rounded-lg text-sm bg-white"
+                  value={review.followed_instruction}
+                  onChange={(e) => setReview({...review, followed_instruction: e.target.value})}
+                >
+                  <option value="unknown">Unknown</option>
+                  <option value="yes">Yes</option>
+                  <option value="no">No</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Code Worked</Label>
+                <select 
+                  className="w-full p-2 border border-slate-200 rounded-lg text-sm bg-white"
+                  value={review.code_worked}
+                  onChange={(e) => setReview({...review, code_worked: e.target.value})}
+                >
+                  <option value="unknown">Unknown</option>
+                  <option value="yes">Yes</option>
+                  <option value="no">No</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Seemed Confused</Label>
+                <select 
+                  className="w-full p-2 border border-slate-200 rounded-lg text-sm bg-white"
+                  value={review.seemed_confused}
+                  onChange={(e) => setReview({...review, seemed_confused: e.target.value})}
+                >
+                  <option value="unknown">Unknown</option>
+                  <option value="yes">Yes</option>
+                  <option value="no">No</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Overused Tools</Label>
+                <select 
+                  className="w-full p-2 border border-slate-200 rounded-lg text-sm bg-white"
+                  value={review.overused_tools}
+                  onChange={(e) => setReview({...review, overused_tools: e.target.value})}
+                >
+                  <option value="unknown">Unknown</option>
+                  <option value="yes">Yes</option>
+                  <option value="no">No</option>
+                </select>
+              </div>
+            </div>
+
             <div className="space-y-3">
               <Label htmlFor="notes" className="text-sm font-semibold text-slate-700">Audit Notes</Label>
               <Textarea 
