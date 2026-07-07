@@ -51,6 +51,16 @@ class TimelineEventSchema(BaseModel):
     type: str
     detail: str
 
+class CompactionAnalyticsSchema(BaseModel):
+    timestamp: datetime.datetime
+    files_before: List[str]
+    events_after: int
+    repeated_files_after: List[str]
+    recreated_files_after: List[str]
+    repeated_markers_after: List[str]
+    churn_before: dict
+    churn_after: dict
+
 class LiveMetricsResponse(BaseModel):
     session_id: str
     status: str
@@ -65,3 +75,4 @@ class LiveMetricsResponse(BaseModel):
     write_amplification: float
     file_churns: List[FileChurnSchema]
     timeline: List[TimelineEventSchema]
+    compaction_analytics: List[CompactionAnalyticsSchema] = []

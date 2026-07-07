@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Activity, Clock, FileCode2, Files, RefreshCw, Square, Download, ListTree, BarChart2, FileText, FilePlus, FileMinus, FileEdit } from "lucide-react";
+import { Activity, Clock, FileCode2, Files, RefreshCw, Square, Download, ListTree, BarChart2, FileText, FilePlus, FileMinus, FileEdit, AlertTriangle } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid, Cell } from 'recharts';
 
 function DashboardContent() {
@@ -336,6 +336,93 @@ function DashboardContent() {
                 </div>
               )}
             </div>
+
+            {/* Compaction Analytics */}
+            {metrics.compaction_analytics && metrics.compaction_analytics.length > 0 && (
+              <div className="space-y-4 pt-6 border-t border-slate-200">
+                <div className="flex items-center justify-between px-1">
+                  <h2 className="text-xl font-semibold text-slate-800 tracking-tight flex items-center gap-2">
+                    <AlertTriangle className="w-5 h-5 text-amber-500" />
+                    Compaction Observable Behavior
+                  </h2>
+                  <span className="text-sm font-medium text-slate-500">{metrics.compaction_analytics.length} compactions detected</span>
+                </div>
+                
+                <div className="grid gap-4">
+                  {metrics.compaction_analytics.map((comp: any, idx: number) => (
+                    <Card key={idx} className="border-0 shadow-sm ring-1 ring-amber-200 bg-amber-50/30 overflow-hidden relative">
+                      <div className="absolute top-0 left-0 w-1 h-full bg-amber-400 opacity-80" />
+                      <CardHeader className="py-4 border-b border-amber-100/50 bg-amber-50/50">
+                        <div className="flex justify-between items-center">
+                          <CardTitle className="text-base text-slate-800 font-semibold">
+                            Compaction at {new Date(comp.timestamp).toLocaleTimeString()}
+                          </CardTitle>
+                          <span className="text-xs font-medium bg-white border border-slate-200 px-2 py-1 rounded-md text-slate-500 shadow-sm">
+                            {comp.events_after} events followed
+                          </span>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="p-4 grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-4">
+                          <div>
+                            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Churn Before → After</p>
+                            <div className="flex items-center gap-4 text-sm bg-white p-3 rounded-lg border border-slate-100 shadow-sm">
+                              <div className="flex-1 text-center border-r border-slate-100">
+                                <span className="block text-emerald-600 font-bold">+{comp.churn_before.written}</span>
+                                <span className="block text-rose-500 font-bold">-{comp.churn_before.deleted}</span>
+                              </div>
+                              <div className="flex-1 text-center">
+                                <span className="block text-emerald-600 font-bold">+{comp.churn_after.written}</span>
+                                <span className="block text-rose-500 font-bold">-{comp.churn_after.deleted}</span>
+                              </div>
+                            </div>
+                          </div>
+                          <div>
+                            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Repeated Tools/Markers</p>
+                            {comp.repeated_markers_after && comp.repeated_markers_after.length > 0 ? (
+                              <div className="flex flex-wrap gap-2">
+                                {comp.repeated_markers_after.map((m: string) => (
+                                  <span key={m} className="px-2 py-1 bg-amber-100 text-amber-800 text-xs font-medium rounded-md border border-amber-200">
+                                    {m}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-sm text-slate-400 italic">None detected.</p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="space-y-4">
+                          <div>
+                            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Repeated Files Modified</p>
+                            {comp.repeated_files_after && comp.repeated_files_after.length > 0 ? (
+                              <ul className="text-xs space-y-1 bg-white p-2 rounded-lg border border-slate-100 shadow-sm max-h-[120px] overflow-y-auto">
+                                {comp.repeated_files_after.map((f: string) => (
+                                  <li key={f} className="font-mono text-slate-700 truncate" title={f}>{f}</li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <p className="text-sm text-slate-400 italic">None detected.</p>
+                            )}
+                          </div>
+                          {comp.recreated_files_after && comp.recreated_files_after.length > 0 && (
+                            <div>
+                              <p className="text-xs font-semibold text-rose-500 uppercase tracking-wider mb-2">Deleted Then Recreated</p>
+                              <ul className="text-xs space-y-1 bg-rose-50 p-2 rounded-lg border border-rose-100 shadow-sm">
+                                {comp.recreated_files_after.map((f: string) => (
+                                  <li key={f} className="font-mono text-rose-700 truncate" title={f}>{f}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            )}
+            
           </div>
 
           {/* Timeline Sidebar */}

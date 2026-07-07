@@ -12,6 +12,7 @@ from .session_manager import session_manager
 from .db import get_session_local
 from .models import Session, FileEvent, FileChurn, PromptNote
 from .report_generator import generate_reports
+from .analytics import generate_compaction_analytics
 
 app = FastAPI(title="codex-blackbox API")
 
@@ -135,7 +136,8 @@ async def broadcast_metrics(session_id: str):
                 total_lines_deleted=c.total_lines_deleted, current_lines=c.current_lines,
                 write_amplification=c.write_amplification, first_seen=c.first_seen, last_seen=c.last_seen
             ) for c in file_churns],
-            timeline=timeline[:100] # keep the last 100 events
+            timeline=timeline[:100], # keep the last 100 events
+            compaction_analytics=generate_compaction_analytics(db, session_id)
         )
         
         await manager.broadcast(session_id, {"type": "metrics_updated", "data": metrics.model_dump()})
@@ -259,7 +261,8 @@ async def get_live_metrics(session_id: str):
                 total_lines_deleted=c.total_lines_deleted, current_lines=c.current_lines,
                 write_amplification=c.write_amplification, first_seen=c.first_seen, last_seen=c.last_seen
             ) for c in file_churns],
-            timeline=timeline[:100]
+            timeline=timeline[:100],
+            compaction_analytics=generate_compaction_analytics(db, session_id)
         )
     finally:
         db.close()

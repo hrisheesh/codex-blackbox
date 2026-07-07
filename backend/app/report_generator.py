@@ -5,6 +5,7 @@ from .models import Session, FileEvent, FileChurn, PromptNote, Review
 from .redaction import redact_dict
 import datetime
 from jinja2 import Template
+from .analytics import generate_compaction_analytics
 
 def generate_reports(session_id: str):
     session_dir = os.path.join(SESSIONS_DIR, session_id)
@@ -47,6 +48,9 @@ def generate_reports(session_id: str):
         
         # Timeline events
         file_events = db.query(FileEvent).filter(FileEvent.session_id == session_id).order_by(FileEvent.time).all()
+        
+        # Compaction analytics
+        compaction_analytics = generate_compaction_analytics(db, session_id)
         
         # Prepare data for templates
         data = {
@@ -96,6 +100,18 @@ def generate_reports(session_id: str):
                 } for e in file_events
             ],
             "notes": [n.text for n in notes],
+            "compaction_analytics": [
+                {
+                    "time": c.timestamp.strftime("%H:%M:%S"),
+                    "files_before": c.files_before,
+                    "events_after": c.events_after,
+                    "repeated_files_after": c.repeated_files_after,
+                    "recreated_files_after": c.recreated_files_after,
+                    "repeated_markers_after": c.repeated_markers_after,
+                    "churn_before": c.churn_before,
+                    "churn_after": c.churn_after
+                } for c in compaction_analytics
+            ],
             "analysis_prompt": "Analyze this codex-blackbox audit bundle. Identify where the coding agent wasted context or tool calls, whether compaction may have caused repeated work or lower quality, and recommend concrete changes to config, global AGENTS.md, project AGENTS.md, and prompting workflow. Be specific and evidence-based."
         }
         
@@ -142,6 +158,20 @@ None recorded.
 |-----------|---------------|---------------|-----------|----------|---------------------|
 {% for churn in churn_details %}
 | {{ churn.path }} | +{{ churn.written }} | -{{ churn.deleted }} | {{ churn.recreated }} | {{ churn.rewritten }} | {{ churn.wa }} |
+{% endfor %}
+
+## Compaction Observable Behavior
+{% for comp in compaction_analytics %}
+### Compaction at {{ comp.time }}
+- **Files touched before:** {{ comp.files_before | join(', ') if comp.files_before else 'None' }}
+- **Events after:** {{ comp.events_after }}
+- **Repeated files after:** {{ comp.repeated_files_after | join(', ') if comp.repeated_files_after else 'None' }}
+- **Recreated files after:** {{ comp.recreated_files_after | join(', ') if comp.recreated_files_after else 'None' }}
+- **Repeated markers after:** {{ comp.repeated_markers_after | join(', ') if comp.repeated_markers_after else 'None' }}
+- **Churn Before:** +{{ comp.churn_before.written }} / -{{ comp.churn_before.deleted }}
+- **Churn After:** +{{ comp.churn_after.written }} / -{{ comp.churn_after.deleted }}
+{% else %}
+No compactions detected.
 {% endfor %}
 
 ## Timeline
@@ -218,6 +248,22 @@ th { background-color: #f2f2f2; }
 {% endfor %}
 </table>
 
+<h2>Compaction Observable Behavior</h2>
+{% for comp in compaction_analytics %}
+<h3>Compaction at {{ comp.time }}</h3>
+<ul>
+<li><b>Files touched before:</b> {{ comp.files_before | join(', ') if comp.files_before else 'None' }}</li>
+<li><b>Events after:</b> {{ comp.events_after }}</li>
+<li><b>Repeated files after:</b> {{ comp.repeated_files_after | join(', ') if comp.repeated_files_after else 'None' }}</li>
+<li><b>Recreated files after:</b> {{ comp.recreated_files_after | join(', ') if comp.recreated_files_after else 'None' }}</li>
+<li><b>Repeated markers after:</b> {{ comp.repeated_markers_after | join(', ') if comp.repeated_markers_after else 'None' }}</li>
+<li><b>Churn Before:</b> +{{ comp.churn_before.written }} / -{{ comp.churn_before.deleted }}</li>
+<li><b>Churn After:</b> +{{ comp.churn_after.written }} / -{{ comp.churn_after.deleted }}</li>
+</ul>
+{% else %}
+<p>No compactions detected.</p>
+{% endfor %}
+
 <h2>Timeline</h2>
 <ul>
 {% for event in timeline %}
@@ -273,6 +319,18 @@ th { background-color: #f2f2f2; }
                 "overused_tools": review.overused_tools,
                 "notes": review.notes
             } if review else None,
+            "compaction_analytics": [
+                {
+                    "timestamp": c.timestamp.isoformat() + "Z",
+                    "files_before": c.files_before,
+                    "events_after": c.events_after,
+                    "repeated_files_after": c.repeated_files_after,
+                    "recreated_files_after": c.recreated_files_after,
+                    "repeated_markers_after": c.repeated_markers_after,
+                    "churn_before": c.churn_before,
+                    "churn_after": c.churn_after
+                } for c in compaction_analytics
+            ],
             "analysis_prompt": "Analyze this codex-blackbox audit bundle. Identify where the coding agent wasted context or tool calls, whether compaction may have caused repeated work or lower quality, and recommend concrete changes to config, global AGENTS.md, project AGENTS.md, and prompting workflow. Be specific and evidence-based."
         }
         
