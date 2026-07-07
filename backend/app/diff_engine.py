@@ -127,11 +127,13 @@ class DiffEngine:
         if event_type == "file_deleted":
             file_churn.deleted = True
             file_churn.current_lines = 0
-        elif event_type == "file_created" and file_churn.deleted:
+        elif (event_type == "file_created" or event_type == "file_modified") and file_churn.deleted:
             file_churn.recreated_count += 1
             file_churn.deleted = False
             file_churn.current_lines = lines_after
             file_churn.total_lines_written += delta_added
+            if event_type == "file_modified":
+                file_churn.modify_count += 1
         else:
             file_churn.modify_count += 1
             file_churn.current_lines = lines_after
