@@ -43,6 +43,23 @@ export async function addPromptNote(sessionId: string, text: string) {
   return res.json();
 }
 
+export async function exportSession(sessionId: string) {
+  const res = await fetch(`${API_BASE}/sessions/${sessionId}/export`, {
+    method: "GET",
+  });
+  if (!res.ok) throw new Error("Failed to export session");
+  
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `audit_bundle_${sessionId}.zip`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}
+
 export async function generateReport(sessionId: string) {
   const res = await fetch(`${API_BASE}/sessions/${sessionId}/report`, {
     method: "POST",

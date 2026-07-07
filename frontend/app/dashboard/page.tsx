@@ -2,7 +2,7 @@
 
 import { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { getLiveMetrics, stopSession, addReview, generateReport, addPromptNote } from "@/lib/api";
+import { getLiveMetrics, stopSession, addReview, generateReport, addPromptNote, exportSession } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
@@ -71,6 +71,16 @@ function DashboardContent() {
     setReportGenerated(true);
   };
 
+  const handleExport = async () => {
+    if (!sessionId) return;
+    try {
+      await exportSession(sessionId);
+    } catch (err) {
+      console.error("Failed to export session:", err);
+      alert("Failed to export session.");
+    }
+  };
+
   const handleAddNote = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!sessionId || !newNote.trim()) return;
@@ -136,8 +146,8 @@ function DashboardContent() {
                   </Button>
                 )}
                 {reportGenerated && (
-                  <Button className="bg-blue-600 hover:bg-blue-700 rounded-full shadow-lg shadow-blue-500/20" onClick={() => alert('Reports are in the sessions directory.')}>
-                    <Download className="mr-2 h-4 w-4" /> Download Report
+                  <Button onClick={handleExport} className="bg-blue-600 hover:bg-blue-700 rounded-full shadow-lg shadow-blue-500/20">
+                    <Download className="mr-2 h-4 w-4" /> Export LLM Audit Bundle
                   </Button>
                 )}
               </div>

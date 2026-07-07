@@ -8,8 +8,13 @@ from .schemas import (
     PromptNoteRequest, ReviewRequest, GenerateReportResponse,
     LiveMetricsResponse, FileChurnSchema
 )
-from .session_manager import session_manager
-from .db import get_session_local
+from fastapi.responses import StreamingResponse
+import io
+import os
+import json
+import zipfile
+from .redaction import redact_text, redact_dict
+from .db import get_session_local, SESSIONS_DIR
 from .models import Session, FileEvent, FileChurn, PromptNote
 from .report_generator import generate_reports
 from .analytics import generate_compaction_analytics, detect_suspicious_patterns
@@ -277,6 +282,102 @@ async def generate_report_api(session_id: str):
         "report_html_path": report_html,
         "audit_bundle_path": audit_json
     }
+
+@app.get("/api/sessions/{session_id}/export")
+async def export_session(session_id: str):
+    session_dir = os.path.join(SESSIONS_DIR, session_id)
+    if not os.path.exists(session_dir):
+        raise HTTPException(status_code=404, detail="Session not found")
+        
+    # Ensure reports exist
+    generate_reports(session_id)
+    
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
+        # Load the LLM Audit Bundle to extract components
+        audit_path = os.path.join(session_dir, "llm_audit_bundle.json")
+        if os.path.exists(audit_path):
+            with open(audit_path, "r") as f:
+                audit_data = json.load(f)
+                
+            # Create metrics.json
+            metrics_data = {
+                "metadata": audit_data.get("metadata", {}),
+                "summary": audit_data.get("summary", {})
+            }
+            zip_file.writestr("metrics.json", json.dumps(metrics_data, indent=2))
+            
+            # Create summary.md
+            summary_md = f"# LLM Audit Summary\n\n## Metrics\n```json\n{json.dumps(metrics_data['summary'], indent=2)}\n```\n\n"
+            summary_md += f"## Prompt Notes\n" + "\n".join(audit_data.get("prompt_notes", [])) + "\n\n"
+            summary_md += f"## LLM Analysis Prompt\n\n```text\n{audit_data.get('analysis_prompt', '')}\n```\n"
+            zip_file.writestr("summary.md", summary_md)
+            
+            # Extract specific components
+            if "compaction_analytics" in audit_data:
+                zip_file.writestr("compact_analysis.json", json.dumps(audit_data["compaction_analytics"], indent=2))
+            if "suspicious_patterns" in audit_data:
+                zip_file.writestr("suspicious_patterns.json", json.dumps(audit_data["suspicious_patterns"], indent=2))
+                
+        # Helper to redact and add file
+        def add_file_to_zip(filename, arcname):
+            filepath = os.path.join(session_dir, filename)
+            if os.path.exists(filepath):
+                with open(filepath, "r") as f:
+                    content = f.read()
+                redacted_content = redact_text(content)
+                zip_file.writestr(arcname, redacted_content)
+                
+        add_file_to_zip("file_churn.json", "file_churn.json")
+        add_file_to_zip("file_events.jsonl", "events.jsonl")
+        
+        # Split events into file_events and codex_log_events
+        events_path = os.path.join(session_dir, "file_events.jsonl")
+        if os.path.exists(events_path):
+            file_events = []
+            log_events = []
+            with open(events_path, "r") as f:
+                for line in f:
+                    if line.strip():
+                        try:
+                            event = json.loads(line)
+                            if event.get("type") == "codex_log_marker":
+                                log_events.append(redact_text(line))
+                            else:
+                                file_events.append(redact_text(line))
+                        except:
+                            file_events.append(redact_text(line))
+            
+            zip_file.writestr("file_events.jsonl", "".join(file_events))
+            if log_events:
+                zip_file.writestr("codex_log_events.jsonl", "".join(log_events))
+                
+        add_file_to_zip("review.json", "review.json")
+        add_file_to_zip("report.md", "report.md")
+        add_file_to_zip("diffs/final.patch", "final_diff.patch")
+        
+        # Generate timeline.md
+        db = get_session_local(session_id)
+        try:
+            timeline_events = db.query(FileEvent).filter(FileEvent.session_id == session_id).order_by(FileEvent.time).all()
+            timeline_md = "# Timeline\n\n"
+            for e in timeline_events:
+                detail = f"{e.path}"
+                if e.type == "file_modified":
+                    detail += f" (+{e.delta_added} -{e.delta_deleted})"
+                elif e.type == "codex_log_marker":
+                    detail = f"Codex marker: {e.change_kind} in {e.path}"
+                timeline_md += f"- `{e.time.strftime('%H:%M:%S')}` **{e.type}** {redact_text(detail)}\n"
+            zip_file.writestr("timeline.md", timeline_md)
+        finally:
+            db.close()
+            
+    zip_buffer.seek(0)
+    return StreamingResponse(
+        zip_buffer,
+        media_type="application/zip",
+        headers={"Content-Disposition": f"attachment; filename=audit_bundle_{session_id}.zip"}
+    )
 
 @app.websocket("/ws/sessions/{session_id}")
 async def websocket_endpoint(websocket: WebSocket, session_id: str):
