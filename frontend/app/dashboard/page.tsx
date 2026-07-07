@@ -368,6 +368,7 @@ function DashboardContent() {
                     if (event.type === "file_created") dotColor = "bg-emerald-500";
                     else if (event.type === "file_deleted") dotColor = "bg-rose-500";
                     else if (event.type === "file_modified") dotColor = "bg-blue-500";
+                    else if (event.type === "codex_log_marker") dotColor = "bg-amber-500";
                     else if (event.type.includes("started") || event.type.includes("stopped")) dotColor = "bg-violet-500";
 
                     return (

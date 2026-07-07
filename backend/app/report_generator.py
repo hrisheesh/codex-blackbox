@@ -92,7 +92,7 @@ def generate_reports(session_id: str):
                     "time": e.time.strftime("%H:%M:%S"),
                     "type": e.type,
                     "path": e.path,
-                    "delta": f"+{e.delta_added} -{e.delta_deleted}" if e.type == "file_modified" else ""
+                    "delta": f"+{e.delta_added} -{e.delta_deleted}" if e.type == "file_modified" else (f"Codex marker: {e.change_kind}" if e.type == "codex_log_marker" else "")
                 } for e in file_events
             ],
             "notes": [n.text for n in notes],

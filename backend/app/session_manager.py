@@ -6,11 +6,13 @@ from .models import Session, PromptNote, Review
 from .db import get_session_local, SESSIONS_DIR
 from .diff_engine import DiffEngine
 from .file_watcher import FileWatcher
+from .codex_watcher import CodexLogWatcher
 
 class SessionManager:
     def __init__(self):
         self.active_sessions = {}
         self.file_watcher = FileWatcher()
+        self.codex_watcher = CodexLogWatcher()
         
     def _generate_session_id(self):
         now = datetime.datetime.now()
@@ -53,6 +55,7 @@ class SessionManager:
                 pass
             
             self.file_watcher.start_watching(session_id, project_path, diff_engine, broadcast_callback)
+            self.codex_watcher.start_watching(session_id, codex_log_path, broadcast_callback)
             
             return session_id
         finally:
@@ -61,6 +64,7 @@ class SessionManager:
     def stop_session(self, session_id: str):
         if session_id in self.active_sessions:
             self.file_watcher.stop_watching(session_id)
+            self.codex_watcher.stop_watching(session_id)
             del self.active_sessions[session_id]
             
         db = get_session_local(session_id)

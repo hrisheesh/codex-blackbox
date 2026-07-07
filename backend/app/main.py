@@ -95,9 +95,12 @@ async def broadcast_metrics(session_id: str):
         # Add file events (limit to last 50 for performance on UI)
         file_events = db.query(FileEvent).filter(FileEvent.session_id == session_id).order_by(FileEvent.time.desc()).limit(50).all()
         for e in file_events:
-            detail = f"{e.path}"
-            if e.type == "file_modified":
-                detail += f" (+{e.delta_added} -{e.delta_deleted})"
+            if e.type == "codex_log_marker":
+                detail = f"Codex marker: {e.change_kind} in {e.path}"
+            else:
+                detail = f"{e.path}"
+                if e.type == "file_modified":
+                    detail += f" (+{e.delta_added} -{e.delta_deleted})"
             timeline.append({
                 "time": e.time,
                 "type": e.type,
@@ -218,9 +221,12 @@ async def get_live_metrics(session_id: str):
             })
         file_events = db.query(FileEvent).filter(FileEvent.session_id == session_id).order_by(FileEvent.time.desc()).limit(50).all()
         for e in file_events:
-            detail = f"{e.path}"
-            if e.type == "file_modified":
-                detail += f" (+{e.delta_added} -{e.delta_deleted})"
+            if e.type == "codex_log_marker":
+                detail = f"Codex marker: {e.change_kind} in {e.path}"
+            else:
+                detail = f"{e.path}"
+                if e.type == "file_modified":
+                    detail += f" (+{e.delta_added} -{e.delta_deleted})"
             timeline.append({
                 "time": e.time,
                 "type": e.type,
