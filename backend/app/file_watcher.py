@@ -25,8 +25,9 @@ class ProjectEventHandler(FileSystemEventHandler):
             ".cs", ".java", ".kt", ".go", ".rs", ".sql"
         }
         
-        # Debounce dictionary
+        # Debounce dictionaries
         self.debounce_timers = {}
+        self.pending_events = {}
 
     def is_ignored(self, path: str) -> bool:
         parts = path.split(os.sep)
@@ -54,6 +55,8 @@ class ProjectEventHandler(FileSystemEventHandler):
                 if self.broadcast_callback:
                     self.broadcast_callback(self.session_id)
         finally:
+            if path in self.pending_events:
+                del self.pending_events[path]
             db.close()
             
     def process_event(self, event_type: str, path: str):
@@ -63,6 +66,15 @@ class ProjectEventHandler(FileSystemEventHandler):
         # Debounce logic
         if path in self.debounce_timers:
             self.debounce_timers[path].cancel()
+            
+            # Upgrade or preserve event type
+            old_event = self.pending_events.get(path)
+            if old_event == "file_created" and event_type == "file_modified":
+                event_type = "file_created"
+            elif old_event == "file_deleted" and event_type == "file_modified":
+                pass # This shouldn't happen unless recreated, handled by created.
+                
+        self.pending_events[path] = event_type
             
         timer = threading.Timer(0.3, self.process_event_debounced, args=(event_type, path))
         self.debounce_timers[path] = timer
@@ -92,6 +104,8 @@ class FileWatcher:
     def start_watching(self, session_id: str, project_path: str, diff_engine: DiffEngine, broadcast_callback):
         if session_id in self.observers:
             return
+            
+        diff_engine.initialize_snapshots(project_path)
             
         event_handler = ProjectEventHandler(session_id, project_path, diff_engine, broadcast_callback)
         observer = Observer()

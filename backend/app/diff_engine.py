@@ -2,6 +2,7 @@ import os
 import difflib
 import datetime
 import json
+import threading
 from sqlalchemy.orm import Session as SQLAlchemySession
 from .models import FileEvent, FileChurn
 
@@ -11,9 +12,38 @@ class DiffEngine:
         self.snapshots_dir = os.path.join(session_dir, "snapshots")
         os.makedirs(self.snapshots_dir, exist_ok=True)
         self.max_snapshot_size = 1 * 1024 * 1024 # 1 MB
+        self._lock = threading.Lock()
         
         # In-memory cache for fast lookups
         self.files_cache = {}
+        
+        self.ignored_dirs = {
+            ".git", "node_modules", ".DS_Store", "DerivedData", "build",
+            "dist", ".next", ".swiftpm", "Pods", "Carthage", ".vendor",
+            "coverage", "__pycache__", ".pytest_cache", ".idea"
+        }
+        
+        self.tracked_extensions = {
+            ".swift", ".md", ".txt", ".json", ".yaml", ".yml", ".toml",
+            ".xml", ".html", ".css", ".js", ".jsx", ".ts", ".tsx", ".py",
+            ".cs", ".java", ".kt", ".go", ".rs", ".sql"
+        }
+
+    def initialize_snapshots(self, project_path: str):
+        for root, dirs, files in os.walk(project_path):
+            dirs[:] = [d for d in dirs if d not in self.ignored_dirs]
+            for file in files:
+                _, ext = os.path.splitext(file)
+                if ext.lower() in self.tracked_extensions:
+                    absolute_path = os.path.join(root, file)
+                    relative_path = os.path.relpath(absolute_path, project_path)
+                    try:
+                        if os.path.getsize(absolute_path) <= self.max_snapshot_size:
+                            with open(absolute_path, 'r', encoding='utf-8') as f:
+                                content = f.read()
+                                self.save_snapshot(relative_path, content)
+                    except Exception:
+                        pass
 
     def get_snapshot_path(self, relative_path: str) -> str:
         safe_path = relative_path.replace("/", "_").replace("\\", "_")
@@ -36,22 +66,23 @@ class DiffEngine:
                 f.write(content)
 
     def process_file_change(self, db: SQLAlchemySession, session_id: str, event_type: str, absolute_path: str, project_path: str):
-        if not absolute_path.startswith(project_path):
-            return None, None
-            
-        relative_path = os.path.relpath(absolute_path, project_path)
-        
-        # Check size before reading
-        if event_type != "file_deleted":
-            try:
-                if os.path.getsize(absolute_path) > self.max_snapshot_size:
-                    return None, None # Skip huge files for MVP
-            except OSError:
+        with self._lock:
+            if not absolute_path.startswith(project_path):
                 return None, None
                 
-        old_lines = self.load_snapshot(relative_path)
-        new_lines = []
-        new_content = ""
+            relative_path = os.path.relpath(absolute_path, project_path)
+            
+            # Check size before reading
+            if event_type != "file_deleted":
+                try:
+                    if os.path.getsize(absolute_path) > self.max_snapshot_size:
+                        return None, None # Skip huge files for MVP
+                except OSError:
+                    return None, None
+                    
+            old_lines = self.load_snapshot(relative_path)
+            new_lines = []
+            new_content = ""
         
         if event_type != "file_deleted":
             try:
