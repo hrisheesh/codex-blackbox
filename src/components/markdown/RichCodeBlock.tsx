@@ -22,25 +22,25 @@ export default function RichCodeBlock({
   };
 
   return (
-    <div 
-      className="my-6 overflow-hidden rounded-2xl border border-hairline bg-white shadow-sm transition-all duration-300 hover:shadow-md group"
+    <div
+      className="group my-6 overflow-hidden rounded-lg border border-hairline bg-white shadow-sm transition hover:border-hairline-soft"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
       {/* Header Bar */}
-      <div className="flex items-center justify-between border-b border-hairline-soft bg-stone/20 px-4 py-2.5">
+      <div className="flex items-center justify-between gap-3 border-b border-hairline-soft bg-surface-soft px-4 py-2.5">
         <div className="flex items-center gap-2">
           {/* Mac-style window controls */}
-          <div className="flex gap-1.5 opacity-80 mix-blend-multiply">
-            <div className="size-3 rounded-full bg-[#FF5F56] border border-black/10" />
-            <div className="size-3 rounded-full bg-[#FFBD2E] border border-black/10" />
-            <div className="size-3 rounded-full bg-[#27C93F] border border-black/10" />
+          <div className="flex gap-1.5 opacity-75 mix-blend-multiply">
+            <div className="size-2.5 rounded-full border border-black/10 bg-[#FF5F56]" />
+            <div className="size-2.5 rounded-full border border-black/10 bg-[#FFBD2E]" />
+            <div className="size-2.5 rounded-full border border-black/10 bg-[#27C93F]" />
           </div>
-          <span className="ml-2 text-[11px] font-bold uppercase tracking-widest text-slate/60">
+          <span className="ml-2 truncate text-[11px] font-bold uppercase text-steel">
             {language || "code"}
           </span>
         </div>
-        
+
         <AnimatePresence>
           {(isHovered || copied) && (
             <motion.button
@@ -49,7 +49,7 @@ export default function RichCodeBlock({
               exit={{ opacity: 0, scale: 0.9 }}
               whileTap={{ scale: 0.95 }}
               onClick={handleCopy}
-              className="flex items-center gap-1.5 rounded-lg bg-white px-2.5 py-1 text-xs font-bold text-slate shadow-sm ring-1 ring-black/5 transition-colors hover:text-brand-blue"
+              className="flex shrink-0 items-center gap-1.5 rounded-md bg-white px-2.5 py-1 text-xs font-bold text-slate shadow-sm ring-1 ring-black/5 transition-colors hover:text-brand-blue focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/35"
             >
               <AnimatePresence mode="wait">
                 {copied ? (
@@ -92,11 +92,11 @@ export default function RichCodeBlock({
           style={oneLight}
           customStyle={{
             margin: 0,
-            padding: "1.25rem",
+            padding: "1rem",
             backgroundColor: "transparent",
             fontSize: "13px",
             lineHeight: "1.6",
-            overflowX: "auto"
+            overflowX: "auto",
           }}
           wrapLines={false}
           showLineNumbers={true}
