@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Activity, Clock, FileCode2, Files, RefreshCw, Square, Download, ListTree, BarChart2, FileText, FilePlus, FileMinus, FileEdit, AlertTriangle, ShieldAlert } from "lucide-react";
+import { Activity, Clock, FileCode2, Files, RefreshCw, Square, Download, ListTree, BarChart2, FileText, FilePlus, FileMinus, FileEdit, AlertTriangle, ShieldAlert, Lightbulb } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid, Cell } from 'recharts';
 
 function DashboardContent() {
@@ -503,6 +503,45 @@ function DashboardContent() {
                       </Card>
                     );
                   })}
+                </div>
+              </div>
+            )}
+            
+            {/* Recommendations */}
+            {metrics.recommendations && metrics.recommendations.length > 0 && (
+              <div className="space-y-4 pt-6 border-t border-slate-200">
+                <div className="flex items-center justify-between px-1">
+                  <h2 className="text-xl font-semibold text-slate-800 tracking-tight flex items-center gap-2">
+                    <Lightbulb className="w-5 h-5 text-amber-500" />
+                    Agent Workflow Recommendations
+                  </h2>
+                  <span className="text-sm font-medium text-slate-500">{metrics.recommendations.length} recommendations</span>
+                </div>
+                
+                <div className="grid grid-cols-1 gap-4">
+                  {metrics.recommendations.map((rec: any, idx: number) => (
+                    <Card key={idx} className="border-0 shadow-sm ring-1 ring-amber-200 bg-amber-50/30 overflow-hidden">
+                      <CardHeader className="py-4 border-b border-amber-100/50 bg-amber-100/20">
+                        <CardTitle className="text-base text-amber-900 font-semibold leading-tight">
+                          {rec.issue}
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-4 space-y-4">
+                        <div>
+                          <p className="text-xs font-semibold text-amber-700/70 uppercase tracking-wider mb-1">Evidence</p>
+                          <p className="text-sm text-amber-900 leading-snug">
+                            {rec.evidence}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs font-semibold text-amber-700/70 uppercase tracking-wider mb-1">Recommendation</p>
+                          <p className="text-sm font-medium text-amber-900 leading-snug bg-white/60 p-3 rounded-lg border border-amber-200/50">
+                            {rec.recommendation}
+                          </p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
                 </div>
               </div>
             )}

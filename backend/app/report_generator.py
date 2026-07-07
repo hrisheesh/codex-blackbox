@@ -5,7 +5,7 @@ from .models import Session, FileEvent, FileChurn, PromptNote, Review
 from .redaction import redact_dict
 import datetime
 from jinja2 import Template
-from .analytics import generate_compaction_analytics, detect_suspicious_patterns
+from .analytics import generate_compaction_analytics, detect_suspicious_patterns, generate_recommendations
 
 def generate_reports(session_id: str):
     session_dir = os.path.join(SESSIONS_DIR, session_id)
@@ -54,6 +54,9 @@ def generate_reports(session_id: str):
         
         # Suspicious patterns
         suspicious_patterns = detect_suspicious_patterns(db, session_id)
+        
+        # Recommendations
+        recommendations = generate_recommendations(db, session_id)
         
         # Prepare data for templates
         data = {
@@ -124,6 +127,13 @@ def generate_reports(session_id: str):
                     "why_it_matters": p.why_it_matters
                 } for p in suspicious_patterns
             ],
+            "recommendations": [
+                {
+                    "issue": r.issue,
+                    "evidence": r.evidence,
+                    "recommendation": r.recommendation
+                } for r in recommendations
+            ],
             "analysis_prompt": "Analyze this codex-blackbox audit bundle. Identify where the coding agent wasted context or tool calls, whether compaction may have caused repeated work or lower quality, and recommend concrete changes to config, global AGENTS.md, project AGENTS.md, and prompting workflow. Be specific and evidence-based."
         }
         
@@ -180,6 +190,15 @@ None recorded.
 - **Why it matters:** {{ pattern.why_it_matters }}
 {% else %}
 No suspicious patterns detected.
+{% endfor %}
+
+## Recommendations
+{% for rec in recommendations %}
+### {{ rec.issue }}
+- **Evidence:** {{ rec.evidence }}
+- **Recommendation:** {{ rec.recommendation }}
+{% else %}
+No recommendations at this time.
 {% endfor %}
 
 ## Compaction Observable Behavior
@@ -280,6 +299,17 @@ th { background-color: #f2f2f2; }
 </ul>
 {% else %}
 <p>No suspicious patterns detected.</p>
+{% endfor %}
+
+<h2>Recommendations</h2>
+{% for rec in recommendations %}
+<h3>{{ rec.issue }}</h3>
+<ul>
+<li><b>Evidence:</b> {{ rec.evidence }}</li>
+<li><b>Recommendation:</b> {{ rec.recommendation }}</li>
+</ul>
+{% else %}
+<p>No recommendations at this time.</p>
 {% endfor %}
 
 <h2>Compaction Observable Behavior</h2>

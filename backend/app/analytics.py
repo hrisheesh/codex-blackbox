@@ -2,8 +2,8 @@ from typing import List, Dict
 from sqlalchemy.orm import Session
 from typing import List, Dict
 from sqlalchemy.orm import Session
-from .models import FileEvent, FileChurn
-from .schemas import CompactionAnalyticsSchema, SuspiciousPatternSchema
+from .models import FileEvent, FileChurn, Review
+from .schemas import CompactionAnalyticsSchema, SuspiciousPatternSchema, RecommendationSchema
 from collections import defaultdict
 import datetime
 
@@ -180,3 +180,69 @@ def detect_suspicious_patterns(db: Session, session_id: str) -> List[SuspiciousP
                     break # Only report once per marker to avoid spam
 
     return patterns
+
+def generate_recommendations(db: Session, session_id: str) -> List[RecommendationSchema]:
+    recs = []
+    
+    suspicious = detect_suspicious_patterns(db, session_id)
+    compactions = generate_compaction_analytics(db, session_id)
+    churns = db.query(FileChurn).filter(FileChurn.session_id == session_id).all()
+    review = db.query(Review).filter(Review.session_id == session_id).first()
+    
+    # 1. Repeated Searches
+    search_spam = any(
+        s.title.startswith("Repeated Tool Usage:") and 
+        any(x in s.title.lower() for x in ["rg", "grep", "search", "find"])
+        for s in suspicious
+    )
+    if search_spam:
+        recs.append(RecommendationSchema(
+            issue="Repeated Searches Detected",
+            evidence="The agent repeatedly used search tools in a short time window.",
+            recommendation="Provide more specific prompt scoping or improve project AGENTS.md search rules to help the agent find context faster."
+        ))
+        
+    # 2. High Write Amplification
+    high_wa = any(c.write_amplification > 3.0 and c.total_lines_written > 100 for c in churns)
+    if high_wa:
+        recs.append(RecommendationSchema(
+            issue="High Write Amplification",
+            evidence="Files were rewritten with high amplification (outputting much more than the file size).",
+            recommendation="Ask for a short implementation plan before allowing large generation to ensure the agent understands the task before writing code."
+        ))
+        
+    # 3. Compaction markers before repeated reads/rewrites
+    compaction_thrashing = any(
+        len(c.repeated_files_after) > 0 or len(c.repeated_markers_after) > 0
+        for c in compactions
+    )
+    if compaction_thrashing:
+        recs.append(RecommendationSchema(
+            issue="Compaction Thrashing",
+            evidence="Compaction events were followed by reading or writing the same files, or repeating the same tools.",
+            recommendation="Split the task into smaller sub-tasks or increase the context compaction threshold so the agent doesn't lose context."
+        ))
+        
+    # 4. Full builds/tests repeatedly
+    test_spam = any(
+        s.title.startswith("Repeated Tool Usage:") and 
+        any(x in s.title.lower() for x in ["test", "xcodebuild", "build", "make"])
+        for s in suspicious
+    )
+    if test_spam:
+        recs.append(RecommendationSchema(
+            issue="Repeated Expensive Validation",
+            evidence="The agent repeatedly triggered tests or builds in a short window.",
+            recommendation="Approval-gate expensive validation commands to prevent the agent from brute-forcing fixes."
+        ))
+        
+    # 5. Many files touched + low quality score
+    files_touched = len(churns)
+    if files_touched > 5 and review and review.quality_score is not None and review.quality_score < 7:
+        recs.append(RecommendationSchema(
+            issue="Broad Scope / Low Quality",
+            evidence=f"The agent touched {files_touched} files, but the session received a low quality score ({review.quality_score}/10).",
+            recommendation="Enforce stricter scope boundaries. The agent may have wandered outside the intended scope."
+        ))
+        
+    return recs

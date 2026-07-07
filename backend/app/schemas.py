@@ -68,6 +68,11 @@ class SuspiciousPatternSchema(BaseModel):
     related_files_events: List[str]
     why_it_matters: str
 
+class RecommendationSchema(BaseModel):
+    issue: str
+    evidence: str
+    recommendation: str
+
 class LiveMetricsResponse(BaseModel):
     session_id: str
     status: str
@@ -84,6 +89,7 @@ class LiveMetricsResponse(BaseModel):
     timeline: List[TimelineEventSchema]
     compaction_analytics: List[CompactionAnalyticsSchema] = []
     suspicious_patterns: List[SuspiciousPatternSchema] = []
+    recommendations: List[RecommendationSchema] = []
 
 class SessionSummarySchema(BaseModel):
     session_id: str
@@ -100,6 +106,7 @@ class SessionSummarySchema(BaseModel):
     possible_tool_calls: int
     suspicious_patterns: int
     quality_score: Optional[int] = None
+    recommendations: int = 0
 
 class ComparisonResultSchema(BaseModel):
     more_efficient: Optional[str]

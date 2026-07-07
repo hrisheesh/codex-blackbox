@@ -18,7 +18,7 @@ from .redaction import redact_text, redact_dict
 from .db import get_session_local, SESSIONS_DIR
 from .models import Session, FileEvent, FileChurn, PromptNote
 from .report_generator import generate_reports
-from .analytics import generate_compaction_analytics, detect_suspicious_patterns
+from .analytics import generate_compaction_analytics, detect_suspicious_patterns, generate_recommendations
 
 app = FastAPI(title="codex-blackbox API")
 
@@ -270,7 +270,8 @@ async def get_live_metrics(session_id: str):
             ) for c in file_churns],
             timeline=timeline[:100],
             compaction_analytics=generate_compaction_analytics(db, session_id),
-            suspicious_patterns=detect_suspicious_patterns(db, session_id)
+            suspicious_patterns=detect_suspicious_patterns(db, session_id),
+            recommendations=generate_recommendations(db, session_id)
         )
     finally:
         db.close()
@@ -440,6 +441,8 @@ def get_session_summary(session_id: str) -> SessionSummarySchema:
             FileEvent.change_kind != "compact"
         ).count()
         
+        recs = generate_recommendations(db, session_id)
+        
         return SessionSummarySchema(
             session_id=session_id,
             duration_seconds=duration,
@@ -454,7 +457,8 @@ def get_session_summary(session_id: str) -> SessionSummarySchema:
             possible_compactions=len(compaction_analytics),
             possible_tool_calls=tool_calls,
             suspicious_patterns=len(suspicious_patterns),
-            quality_score=quality_score
+            quality_score=quality_score,
+            recommendations=len(recs)
         )
     finally:
         db.close()
