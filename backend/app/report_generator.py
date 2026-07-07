@@ -5,7 +5,7 @@ from .models import Session, FileEvent, FileChurn, PromptNote, Review
 from .redaction import redact_dict
 import datetime
 from jinja2 import Template
-from .analytics import generate_compaction_analytics
+from .analytics import generate_compaction_analytics, detect_suspicious_patterns
 
 def generate_reports(session_id: str):
     session_dir = os.path.join(SESSIONS_DIR, session_id)
@@ -51,6 +51,9 @@ def generate_reports(session_id: str):
         
         # Compaction analytics
         compaction_analytics = generate_compaction_analytics(db, session_id)
+        
+        # Suspicious patterns
+        suspicious_patterns = detect_suspicious_patterns(db, session_id)
         
         # Prepare data for templates
         data = {
@@ -112,6 +115,15 @@ def generate_reports(session_id: str):
                     "churn_after": c.churn_after
                 } for c in compaction_analytics
             ],
+            "suspicious_patterns": [
+                {
+                    "title": p.title,
+                    "severity": p.severity,
+                    "evidence": p.evidence,
+                    "related_files_events": p.related_files_events,
+                    "why_it_matters": p.why_it_matters
+                } for p in suspicious_patterns
+            ],
             "analysis_prompt": "Analyze this codex-blackbox audit bundle. Identify where the coding agent wasted context or tool calls, whether compaction may have caused repeated work or lower quality, and recommend concrete changes to config, global AGENTS.md, project AGENTS.md, and prompting workflow. Be specific and evidence-based."
         }
         
@@ -158,6 +170,16 @@ None recorded.
 |-----------|---------------|---------------|-----------|----------|---------------------|
 {% for churn in churn_details %}
 | {{ churn.path }} | +{{ churn.written }} | -{{ churn.deleted }} | {{ churn.recreated }} | {{ churn.rewritten }} | {{ churn.wa }} |
+{% endfor %}
+
+## Suspicious Patterns & Loop Detection
+{% for pattern in suspicious_patterns %}
+### [{{ pattern.severity | upper }}] {{ pattern.title }}
+- **Evidence:** {{ pattern.evidence }}
+- **Related:** {{ pattern.related_files_events | join(', ') }}
+- **Why it matters:** {{ pattern.why_it_matters }}
+{% else %}
+No suspicious patterns detected.
 {% endfor %}
 
 ## Compaction Observable Behavior
@@ -248,6 +270,18 @@ th { background-color: #f2f2f2; }
 {% endfor %}
 </table>
 
+<h2>Suspicious Patterns & Loop Detection</h2>
+{% for pattern in suspicious_patterns %}
+<h3>[{{ pattern.severity | upper }}] {{ pattern.title }}</h3>
+<ul>
+<li><b>Evidence:</b> {{ pattern.evidence }}</li>
+<li><b>Related:</b> {{ pattern.related_files_events | join(', ') }}</li>
+<li><b>Why it matters:</b> {{ pattern.why_it_matters }}</li>
+</ul>
+{% else %}
+<p>No suspicious patterns detected.</p>
+{% endfor %}
+
 <h2>Compaction Observable Behavior</h2>
 {% for comp in compaction_analytics %}
 <h3>Compaction at {{ comp.time }}</h3>
@@ -330,6 +364,15 @@ th { background-color: #f2f2f2; }
                     "churn_before": c.churn_before,
                     "churn_after": c.churn_after
                 } for c in compaction_analytics
+            ],
+            "suspicious_patterns": [
+                {
+                    "title": p.title,
+                    "severity": p.severity,
+                    "evidence": p.evidence,
+                    "related_files_events": p.related_files_events,
+                    "why_it_matters": p.why_it_matters
+                } for p in suspicious_patterns
             ],
             "analysis_prompt": "Analyze this codex-blackbox audit bundle. Identify where the coding agent wasted context or tool calls, whether compaction may have caused repeated work or lower quality, and recommend concrete changes to config, global AGENTS.md, project AGENTS.md, and prompting workflow. Be specific and evidence-based."
         }

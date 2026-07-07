@@ -61,6 +61,13 @@ class CompactionAnalyticsSchema(BaseModel):
     churn_before: dict
     churn_after: dict
 
+class SuspiciousPatternSchema(BaseModel):
+    title: str
+    severity: str
+    evidence: str
+    related_files_events: List[str]
+    why_it_matters: str
+
 class LiveMetricsResponse(BaseModel):
     session_id: str
     status: str
@@ -76,3 +83,4 @@ class LiveMetricsResponse(BaseModel):
     file_churns: List[FileChurnSchema]
     timeline: List[TimelineEventSchema]
     compaction_analytics: List[CompactionAnalyticsSchema] = []
+    suspicious_patterns: List[SuspiciousPatternSchema] = []

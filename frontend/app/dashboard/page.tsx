@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Activity, Clock, FileCode2, Files, RefreshCw, Square, Download, ListTree, BarChart2, FileText, FilePlus, FileMinus, FileEdit, AlertTriangle } from "lucide-react";
+import { Activity, Clock, FileCode2, Files, RefreshCw, Square, Download, ListTree, BarChart2, FileText, FilePlus, FileMinus, FileEdit, AlertTriangle, ShieldAlert } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid, Cell } from 'recharts';
 
 function DashboardContent() {
@@ -419,6 +419,80 @@ function DashboardContent() {
                       </CardContent>
                     </Card>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {/* Suspicious Patterns */}
+            {metrics.suspicious_patterns && metrics.suspicious_patterns.length > 0 && (
+              <div className="space-y-4 pt-6 border-t border-slate-200">
+                <div className="flex items-center justify-between px-1">
+                  <h2 className="text-xl font-semibold text-slate-800 tracking-tight flex items-center gap-2">
+                    <ShieldAlert className="w-5 h-5 text-rose-500" />
+                    Suspicious Patterns & Loop Detection
+                  </h2>
+                  <span className="text-sm font-medium text-slate-500">{metrics.suspicious_patterns.length} patterns detected</span>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {metrics.suspicious_patterns.map((pattern: any, idx: number) => {
+                    let bgColor = "bg-slate-50/50";
+                    let ringColor = "ring-slate-200";
+                    let badgeColor = "bg-slate-100 text-slate-600 border-slate-200";
+                    
+                    if (pattern.severity === "High") {
+                      bgColor = "bg-rose-50/30";
+                      ringColor = "ring-rose-200";
+                      badgeColor = "bg-rose-100 text-rose-700 border-rose-200";
+                    } else if (pattern.severity === "Medium") {
+                      bgColor = "bg-amber-50/30";
+                      ringColor = "ring-amber-200";
+                      badgeColor = "bg-amber-100 text-amber-700 border-amber-200";
+                    } else if (pattern.severity === "Low") {
+                      bgColor = "bg-blue-50/30";
+                      ringColor = "ring-blue-200";
+                      badgeColor = "bg-blue-100 text-blue-700 border-blue-200";
+                    }
+
+                    return (
+                      <Card key={idx} className={`border-0 shadow-sm ring-1 ${ringColor} ${bgColor} overflow-hidden`}>
+                        <CardHeader className="py-4 border-b border-white/50">
+                          <div className="flex justify-between items-start gap-2">
+                            <CardTitle className="text-base text-slate-800 font-semibold leading-tight">
+                              {pattern.title}
+                            </CardTitle>
+                            <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${badgeColor}`}>
+                              {pattern.severity}
+                            </span>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="p-4 space-y-4">
+                          <div>
+                            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Evidence</p>
+                            <p className="text-sm text-slate-700 bg-white/60 p-2 rounded-lg border border-slate-100/50">
+                              {pattern.evidence}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Related Items</p>
+                            <div className="flex flex-wrap gap-2">
+                              {pattern.related_files_events.map((rel: string, i: number) => (
+                                <span key={i} className="px-2 py-1 bg-white/60 text-slate-600 text-[11px] font-mono rounded-md border border-slate-200/60 max-w-full truncate" title={rel}>
+                                  {rel.split('/').pop() || rel}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                          <div>
+                            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Why it matters</p>
+                            <p className="text-sm text-slate-600 leading-snug">
+                              {pattern.why_it_matters}
+                            </p>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
                 </div>
               </div>
             )}
