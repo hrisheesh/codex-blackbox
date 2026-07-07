@@ -26,8 +26,10 @@ build/
 # Project specific
 PRD.md
 sessions/
+reports/
 raw_logs/
 codex_blackbox.db
 test_demo_project/
 test_report.py
 demo_churn.py
+*.jsonl
